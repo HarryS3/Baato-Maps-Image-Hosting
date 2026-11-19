@@ -113,29 +113,24 @@ var LZString=function(){var r=String.fromCharCode,o="ABCDEFGHIJKLMNOPQRSTUVWXYZa
   --ink: #2a2f2f;
   --muted: #68716f;
   --page: #fbfaf6;
+  --outer: #f1f0ea;        /* off-white page background */
   --line: #d8d6cc;
   --wash: #edf1ee;
   --pro: #1e7a34;          /* "Pros" label */
   --con: #b3261e;          /* "Cons" label */
 }
 
-html { background: var(--page); }
+html { background: var(--outer); }
 body {
   margin: 0;
-  background: transparent;   /* the page background is the fixed layer below */
+  background: var(--outer);   /* slightly off-white page */
   color: var(--ink);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif;
   font-size: 18px;
   line-height: 1.5;
 }
-/* Background image on every page (fixed layer, so it stays put while scrolling) */
-body::before {
-  content: "";
-  position: fixed; top: 0; right: 0; bottom: 0; left: 0;
-  z-index: -1;
-  background: var(--page) var(--bg-image) center / cover no-repeat;
-}
-#story { margin: 0 auto; max-width: 32em; padding: 1em 1.1em 2.5em; }
+/* The text column: white, so it stands out from the off-white page */
+#story { box-sizing: border-box; min-height: 100vh; margin: 0 auto; max-width: 32em; padding: 1em 1.1em 2.5em; background: #fff; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 #passages { padding: 0; }
 .passage { transition: opacity 120ms ease-in; }
 
@@ -257,7 +252,56 @@ strong, b { font-weight: 700; color: var(--green-dark); }
 .source .row { display: flex; gap: 0.6em; font-size: 0.95em; }
 .source .tag { flex: 0 0 3.2em; font-size: 0.78em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-top: 0.2em; }
 .source .pro .tag { color: var(--pro); }
-.source .con .tag { color: var(--con); }</style><script role="script" id="twine-user-script" type="text/twine-javascript">/* =========================================================
+.source .con .tag { color: var(--con); }
+
+/* ---------- Interactive map pages ---------- */
+.mapbox { position: relative; height: 52vh; min-height: 300px; margin: 0.9em 0; border: 2px solid var(--green-dark); background: var(--wash); }
+.mapbox.tall { height: 64vh; min-height: 380px; }
+.mapfail { padding: 2em 1em; text-align: center; color: var(--muted); }
+.how { margin: 0 0 0.4em; font-size: 0.9em; color: var(--muted); }
+@media (pointer: coarse) { .mouse-only { display: none; } }
+@media (pointer: fine)   { .touch-only { display: none; } }
+
+.map-label { display: flex; align-items: center; gap: 4px; pointer-events: none; }
+.map-label .dot { width: 14px; height: 14px; border-radius: 50%; background: #b3261e; border: 2px solid #fff; box-shadow: 0 0 0 1px #b3261e; }
+.map-label .txt { padding: 1px 6px; background: #fff; border: 1px solid var(--green-dark); font-size: 13px; font-weight: 700; color: var(--green-dark); }
+.you-dot { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.you-dot .ring { width: 16px; height: 16px; border-radius: 50%; background: #2a6fdb; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(42,111,219,0.2); }
+.you-dot .txt { margin-top: 4px; font-size: 12px; font-weight: 700; color: #2a6fdb; background: #fff; padding: 0 4px; }
+.fixed-arrow { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3; pointer-events: none; }
+
+/* Panels drawn on top of the map */
+.map-panel { position: absolute; z-index: 3; background: #fff; border: 2px solid var(--green-dark); padding: 0.5em 0.6em; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", Arial, sans-serif; font-size: 15px; line-height: 1.35; }
+.map-panel.top { top: 8px; left: 8px; right: 50px; display: flex; gap: 0.6em; align-items: flex-start; }
+.map-panel.bottom { bottom: 8px; left: 8px; right: 38px; }
+.map-panel.hidden { display: none; }
+.pl-title { font-weight: 700; color: var(--green-dark); margin-bottom: 0.35em; }
+.pl-btn { display: block; width: 100%; margin-top: 0.4em; padding: 0.55em; border: 0; background: var(--green); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.pl-btn:disabled { background: #9aa39f; cursor: default; }
+.pl-sum { margin-top: 0.4em; }
+.modes, .turns { display: flex; gap: 0.35em; }
+.modes button, .turns button { flex: 1; padding: 0.45em 0.2em; border: 2px solid var(--green); background: #fff; color: var(--green-dark); font: inherit; font-weight: 600; cursor: pointer; }
+.modes button.active { background: var(--green); color: #fff; }
+.nav-icon { flex: 0 0 auto; width: 1.6em; font-size: 1.7em; line-height: 1; text-align: center; color: var(--green-dark); }
+.nav-dist { font-size: 1.15em; font-weight: 800; color: var(--green-dark); }
+.nav-lm { color: var(--muted); font-size: 0.92em; }
+.nav-eta { font-size: 1.05em; }
+.sim-note { color: var(--muted); font-size: 0.85em; }
+.recenter { position: absolute; z-index: 3; right: 8px; bottom: 86px; padding: 0.5em 0.8em; border: 2px solid var(--green-dark); background: #fff; color: var(--green-dark); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.recenter.hidden { display: none; }
+table.cmp { margin-top: 0.5em; border-collapse: collapse; font-size: 0.95em; }
+table.cmp td { padding: 0.15em 0.9em 0.15em 0; }
+
+/* ---------- Feedback (map tasks and <<answer>> questions) ---------- */
+.hidden { display: none; }
+#feedback:empty { display: none; }
+.fb { margin: 0.8em 0; padding: 0.65em 0.85em; border-left: 4px solid; background: var(--page); }
+.fb.info  { border-color: var(--green-dark); }
+.fb.right { border-color: #1e7a34; background: #e9f4ec; }
+.fb.wrong { border-color: #b3261e; background: #fbeceb; }
+.skip { display: block; margin-top: 0.6em; font-size: 0.85em; }
+.skip a { color: var(--muted); text-decoration: underline; }
+.picked-wrong { opacity: 0.45; text-decoration: line-through; }</style><script role="script" id="twine-user-script" type="text/twine-javascript">/* =========================================================
    HOW THIS MODULE IS WIRED (read once, then just write passages)
 
    1. One line of text in a passage = one paragraph on screen.
@@ -267,7 +311,7 @@ strong, b { font-weight: 700; color: var(--green-dark); }
       to the previous page in the module's page order.
    5. The page order is worked out automatically: start at "Cover"
       and follow the links, in the order they appear in each passage.
-   6. A passage tagged intro, edit, add or road gets a progress bar
+   6. A passage tagged intro, maps, edit, add or road gets a progress bar
       that shows progress through that section only.
    7. <<img "File.jpg">> loads File.jpg from the image repo below,
       and shows a labeled placeholder if the file can't be loaded.
@@ -281,8 +325,6 @@ UIBar.destroy();
    Alternative host built for heavier traffic (updates can lag by hours):
    "https://cdn.jsdelivr.net/gh/HarryS3/Baato-Maps-Image-Hosting@main/"   */
 setup.IMG_BASE = "https://raw.githubusercontent.com/HarryS3/Baato-Maps-Image-Hosting/main/";
-setup.BACKGROUND = "Background.jpg";
-document.documentElement.style.setProperty("--bg-image", 'url("' + setup.IMG_BASE + setup.BACKGROUND + '")');
 Config.history.controls = false;
 Config.history.maxStates = 100;   /* enough history for Back to work all the way to the start */
 Config.passages.nobr = true;
@@ -312,7 +354,7 @@ setup.order = (function () {
 })();
 
 /* ---------- Sections that get their own progress bar (by passage tag) ---------- */
-setup.barTags = ["intro", "edit", "add", "road"];
+setup.barTags = ["intro", "maps", "edit", "add", "road"];
 setup.sectionOf = function (name) {
   var tags = Story.get(name).tags, found = "";
   setup.barTags.forEach(function (t) { if (tags.includes(t)) { found = t; } });
@@ -339,7 +381,7 @@ setup.header = function () {
    "list"    = always the previous page in the page order (as written in the outline).
                From the first page of Adding Data, Back goes to the last page of Editing Data.
    "landing" = same, except the first page of a section goes back to the Landing Page.  */
-setup.BACK_FROM_SECTION_START = "list";
+setup.BACK_FROM_SECTION_START = "landing";
 setup.LANDING = "Landing Page";
 setup.prev = function () {
   var name = passage();
@@ -353,6 +395,540 @@ setup.prev = function () {
   }
   return before;
 };
+
+/* =========================================================
+   INTERACTIVE BAATO MAP (Using Digital Maps section)
+   A passage gets a live map with:  <div class="mapbox" data-task="NAME"></div>
+   NAME is one of the tasks in setup.mapTasks below. A task calls
+   fb.done(...) when it's complete: green feedback + Next appears.
+   ========================================================= */
+setup.BAATO_KEY   = "bpk.GxyidLmMxy0pFwUuUNIzGZ8S2Gu1PJzXov2BMs2jVOwr";
+setup.BAATO_API   = "https://api.baato.io/api/v1/";
+setup.BAATO_STYLE = setup.BAATO_API + "styles/breeze?key=" + setup.BAATO_KEY;
+setup.MAPLIBRE    = "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.1/dist/";
+setup.mapReady    = importScripts(setup.MAPLIBRE + "maplibre-gl.js");
+importStyles(setup.MAPLIBRE + "maplibre-gl.css");
+
+/* Practice locations. Landmark coordinates come from Baato's Places API;
+   the three spatial-thinking spots come from the module outline. */
+setup.places = {
+  dharahara: { lng: 85.31217, lat: 27.70053, name: "Dharahara" },
+  swayambhu: { lng: 85.29040, lat: 27.71490, name: "Swayambhunath" },
+  patan:     { lng: 85.32506, lat: 27.67340, name: "Patan Durbar Square" },
+  stadium:   { lng: 85.29033, lat: 27.67792, name: "TU Cricket Stadium" },
+  /* Spatial Thinking 1: photo spot, and the hospital (answer: West) */
+  st1You:    { lng: 85.3140622, lat: 27.7052899 },
+  birHosp:   { lng: 85.31341, lat: 27.70516, name: "Bir Hospital" },
+  /* Spatial Thinking 2: photo spot, and the Juddha Shamsher statue roundabout it faces */
+  st2You:    { lng: 85.3092409, lat: 27.7035112 },
+  roundabout:{ lng: 85.30914, lat: 27.70366, name: "the roundabout" },
+  /* Spatial Thinking 3: where the photo was taken from */
+  st3Spot:   { lng: 85.31319, lat: 27.70275 }
+};
+setup.ST2_TOLERANCE_DEG = 25;   /* how close the arrow must point to the roundabout */
+setup.ST3_RADIUS_M = 10;        /* how close the pin must be to the photo spot */
+
+/* ---------- Feedback box + Next button ---------- */
+setup.makeFeedback = function () {
+  var finished = false;
+  function show(kind, msg) { $("#feedback").html('<div class="fb ' + kind + '">' + msg + '</div>'); }
+  return {
+    say:  function (msg) { if (!finished) { show("info", msg); } },
+    miss: function (msg) { if (!finished) { show("wrong", msg); } },
+    done: function (msg) {
+      if (finished) { return; }
+      finished = true;
+      show("right", msg);
+      $("#next").removeClass("hidden");
+    },
+    isDone: function () { return finished; }
+  };
+};
+
+/* ---------- Helpers ---------- */
+setup.fmtDist = function (m) { return m >= 1000 ? (m / 1000).toFixed(1) + " km" : Math.round(m) + " m"; };
+setup.fmtTime = function (ms) {
+  var min = Math.max(1, Math.round(ms / 60000));
+  return min >= 60 ? Math.floor(min / 60) + " h " + (min % 60) + " min" : min + " min";
+};
+setup.featureName = function (f) {
+  var p = f.properties || {};
+  return p["name:en"] || p["name:latin"] || p.name_en || p.name || "";
+};
+setup.ll = function (p) { return new maplibregl.LngLat(p.lng, p.lat); };
+
+setup.labelMarker = function (map, place, text, cls) {
+  var el = document.createElement("div");
+  el.className = "map-label " + (cls || "");
+  el.innerHTML = '<span class="dot"></span><span class="txt">' + text + '</span>';
+  return new maplibregl.Marker({ element: el, anchor: "left", offset: [-7, 0] }).setLngLat([place.lng, place.lat]).addTo(map);
+};
+
+setup.youDot = function (map, place, label) {
+  var el = document.createElement("div");
+  el.className = "you-dot";
+  el.innerHTML = '<span class="ring"></span>' + (label ? '<span class="txt">' + label + '</span>' : "");
+  return new maplibregl.Marker({ element: el, anchor: "top", offset: [0, -11] }).setLngLat([place.lng, place.lat]).addTo(map);
+};
+
+setup.targetRing = function (map, place) {
+  if (map.getSource("target-ring")) { return; }
+  map.addSource("target-ring", { type: "geojson", data: { type: "Point", coordinates: [place.lng, place.lat] } });
+  map.addLayer({ id: "target-ring", type: "circle", source: "target-ring",
+    paint: { "circle-radius": 24, "circle-color": "rgba(30,122,52,0.15)", "circle-stroke-color": "#1e7a34", "circle-stroke-width": 3 } });
+};
+
+setup.panel = function (box, cls, html) {
+  var el = document.createElement("div");
+  el.className = "map-panel " + (cls || "");
+  el.innerHTML = html || "";
+  box.appendChild(el);
+  return el;
+};
+
+/* Press-and-hold detection: calls onHold(lngLat) after holding still ~0.6 s */
+setup.onHold = function (map, onHold) {
+  var timer = null, start = null;
+  function cancel() { clearTimeout(timer); timer = null; }
+  function begin(e) {
+    var oe = e.originalEvent;
+    cancel();
+    if (oe && oe.touches && oe.touches.length > 1) { return; }
+    start = e.point;
+    var ll = e.lngLat;
+    timer = setTimeout(function () { timer = null; onHold(ll); }, 600);
+  }
+  function moved(e) { if (timer && start && Math.hypot(e.point.x - start.x, e.point.y - start.y) > 8) { cancel(); } }
+  map.on("mousedown", begin); map.on("touchstart", begin);
+  map.on("mousemove", moved); map.on("touchmove", moved);
+  ["mouseup", "touchend", "touchcancel", "dragstart", "zoomstart", "rotatestart", "pitchstart"].forEach(function (ev) { map.on(ev, cancel); });
+  map.getCanvas().addEventListener("contextmenu", function (ev) { ev.preventDefault(); });
+  return cancel;
+};
+
+/* Pin task shared by "drop a pin" and Spatial Thinking 3 */
+setup.pinTask = function (map, fb, o) {
+  var misses = 0, marker = null;
+  return setup.onHold(map, function (ll) {
+    if (fb.isDone()) { return; }
+    if (marker) { marker.remove(); }
+    var d = ll.distanceTo(setup.ll(o.target));
+    var ok = d <= o.radius;
+    marker = new maplibregl.Marker({ color: ok ? "#1e7a34" : "#1F3A3F" }).setLngLat(ll).addTo(map);
+    if (ok) { fb.done(o.success(d)); return; }
+    misses++;
+    if (misses >= o.revealAfter) {
+      setup.targetRing(map, o.target);
+      if (o.revealIsAnswer) {
+        new maplibregl.Marker({ color: "#1e7a34" }).setLngLat([o.target.lng, o.target.lat]).addTo(map);
+        fb.done(o.reveal(d));
+      } else {
+        map.easeTo({ center: [o.target.lng, o.target.lat], zoom: Math.max(map.getZoom(), 16) });
+        fb.miss(o.reveal(d));
+      }
+    } else {
+      fb.miss(o.retry(d));
+    }
+  });
+};
+
+/* ---------- Baato Directions API ---------- */
+setup.decodePolyline = function (str) {
+  var i = 0, lat = 0, lng = 0, out = [];
+  while (i < str.length) {
+    for (var k = 0; k < 2; k++) {
+      var b, s = 0, r = 0;
+      do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << s; s += 5; } while (b >= 32);
+      var d = (r & 1) ? ~(r >> 1) : (r >> 1);
+      if (k === 0) { lat += d; } else { lng += d; }
+    }
+    out.push([lng / 1e5, lat / 1e5]);
+  }
+  return out;
+};
+setup.routeCache = {};
+setup.getRoute = function (from, to, mode) {
+  var key = [from.lat, from.lng, to.lat, to.lng, mode].join(",");
+  if (setup.routeCache[key]) { return Promise.resolve(setup.routeCache[key]); }
+  var url = setup.BAATO_API + "directions?key=" + setup.BAATO_KEY +
+    "&points[]=" + from.lat + "," + from.lng + "&points[]=" + to.lat + "," + to.lng +
+    "&mode=" + mode + "&instructions=true";
+  return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+    var d = j && j.data && j.data[0];
+    if (!d || !d.encodedPolyline) { throw new Error("no route"); }
+    var coords = setup.decodePolyline(d.encodedPolyline);
+    var cum = [0];
+    for (var i = 1; i < coords.length; i++) {
+      cum.push(cum[i - 1] + new maplibregl.LngLat(coords[i - 1][0], coords[i - 1][1]).distanceTo(new maplibregl.LngLat(coords[i][0], coords[i][1])));
+    }
+    var steps = (d.instructionList || []).map(function (s) {
+      var m = /\[(\d+)/.exec((s.points && s.points.intervalString) || "");
+      var at = m ? Math.min(+m[1], coords.length - 1) : 0;
+      var x = s.extraInfoJSON || {};
+      return { sign: s.sign, name: s.name || "", landmark: x.landmark || "", at: cum[at] };
+    });
+    var route = { coords: coords, cum: cum, steps: steps, dist: d.distanceInMeters, time: d.timeInMs };
+    setup.routeCache[key] = route;
+    return route;
+  });
+};
+setup.drawRoute = function (map, route, color) {
+  var data = { type: "Feature", geometry: { type: "LineString", coordinates: route.coords } };
+  if (map.getSource("route")) { map.getSource("route").setData(data); }
+  else {
+    map.addSource("route", { type: "geojson", data: data });
+    map.addLayer({ id: "route-casing", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#fff", "line-width": 9 } });
+    map.addLayer({ id: "route", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": color || "#2a6fdb", "line-width": 5 } });
+  }
+  if (color) { map.setPaintProperty("route", "line-color", color); }
+};
+setup.fitRoute = function (map, route) {
+  var b = new maplibregl.LngLatBounds();
+  route.coords.forEach(function (c) { b.extend(c); });
+  map.fitBounds(b, { padding: { top: 40, bottom: 120, left: 30, right: 30 }, duration: 600 });
+};
+setup.MODES = { car: "Car", bike: "Bike", foot: "Walk" };
+setup.MODE_COLOR = { car: "#2a6fdb", bike: "#7b3fb5", foot: "#1e7a34" };
+setup.turnText = function (s) {
+  var onto = s.name ? " onto <b>" + s.name + "</b>" : "";
+  switch (s.sign) {
+    case -98: case -8: case 8: return "Make a U-turn" + onto;
+    case -7: return "Keep left" + onto;
+    case 7:  return "Keep right" + onto;
+    case -3: return "Turn sharp left" + onto;
+    case -2: return "Turn left" + onto;
+    case -1: return "Turn slightly left" + onto;
+    case 1:  return "Turn slightly right" + onto;
+    case 2:  return "Turn right" + onto;
+    case 3:  return "Turn sharp right" + onto;
+    case 6:  return "Go through the roundabout" + onto;
+    case 4:  return "Arrive at your destination";
+    default: return "Continue" + (s.name ? " on <b>" + s.name + "</b>" : "");
+  }
+};
+setup.turnIcon = function (sign) {
+  if (sign === 4) { return "●"; }
+  if (sign <= -1 && sign >= -7) { return "↰"; }
+  if (sign >= 1 && sign <= 7 && sign !== 4 && sign !== 6) { return "↱"; }
+  if (sign === 6) { return "↻"; }
+  if (sign === -98 || sign === -8 || sign === 8) { return "↶"; }
+  return "↑";
+};
+/* Point at distance d along a route */
+setup.pointAt = function (route, d) {
+  var c = route.coords, cum = route.cum;
+  if (d <= 0) { return c[0]; }
+  for (var i = 1; i < c.length; i++) {
+    if (cum[i] >= d) {
+      var t = (d - cum[i - 1]) / ((cum[i] - cum[i - 1]) || 1);
+      return [c[i - 1][0] + (c[i][0] - c[i - 1][0]) * t, c[i - 1][1] + (c[i][1] - c[i - 1][1]) * t];
+    }
+  }
+  return c[c.length - 1];
+};
+
+/* ---------- The practice tasks ---------- */
+setup.mapTasks = {
+
+  /* Zoom in to street names, then out to the whole city */
+  zoom: {
+    view: { center: [85.3072, 27.7042], zoom: 13 },
+    run: function (map, fb) {
+      var stage = 1;
+      fb.say("<b>Part 1 of 2:</b> zoom in until you can read street names.");
+      map.on("zoomend", function () {
+        var z = map.getZoom();
+        if (stage === 1 && z >= 16.5) {
+          stage = 2;
+          fb.say("Now you can see single streets and buildings. <b>Part 2 of 2:</b> zoom out until you can see the whole city.");
+        } else if (stage === 2 && z <= 11.5) {
+          fb.done("Zooming in shows a small area in detail. Zooming out shows a big area with less detail.");
+        }
+      });
+    }
+  },
+
+  /* Pan/zoom until Dharahara is on screen (no marker: uses city knowledge) */
+  pan: {
+    view: { center: [85.3240, 27.7180], zoom: 15 },
+    run: function (map, fb) {
+      var t = setup.places.dharahara, shown = false;
+      var h1 = setTimeout(function () { fb.say("Hint: Dharahara is <b>south</b> of here, near Sundhara and Tundikhel. Drag the map <b>up</b> to move south."); }, 20000);
+      var h2 = setTimeout(function () {
+        if (!shown) { shown = true; setup.labelMarker(map, t, "Dharahara"); }
+        fb.say("Hint: we've marked Dharahara with a red dot. Move the map until you can see it.");
+      }, 45000);
+      function check() {
+        var c = map.getContainer(), p = map.project([t.lng, t.lat]), m = 0.08;
+        var inView = p.x > c.clientWidth * m && p.x < c.clientWidth * (1 - m) && p.y > c.clientHeight * m && p.y < c.clientHeight * (1 - m);
+        if (inView && map.getZoom() >= 14) {
+          clearTimeout(h1); clearTimeout(h2);
+          fb.done("You found Dharahara! Moving and zooming the map together is how you look for any place.");
+        } else if (inView) {
+          fb.say("Dharahara is on screen, but the map is zoomed out too far to see it clearly. Zoom in a little.");
+        }
+      }
+      map.on("moveend", check);
+      return function () { clearTimeout(h1); clearTimeout(h2); };
+    }
+  },
+
+  /* Rotate, then reset north with the compass */
+  rotate: {
+    view: { center: [85.3072, 27.7042], zoom: 16 },
+    run: function (map, fb) {
+      var stage = 1;
+      fb.say("<b>Part 1 of 2:</b> turn the map so that north is no longer at the top.");
+      map.on("moveend", function () {
+        var b = Math.abs(map.getBearing());
+        if (stage === 1 && b >= 30) {
+          stage = 2;
+          fb.say("North is no longer at the top. <b>Part 2 of 2:</b> tap the <b>compass</b> button (top right) to turn the map back.");
+        } else if (stage === 2 && b <= 1) {
+          fb.done("North is at the top again. The compass always shows which way north is.");
+        }
+      });
+    }
+  },
+
+  /* Press and hold on Swayambhunath */
+  pin: {
+    view: { center: [85.3010, 27.7110], zoom: 14.5 },
+    run: function (map, fb) {
+      return setup.pinTask(map, fb, {
+        target: setup.places.swayambhu, radius: 100, revealAfter: 2, revealIsAnswer: false,
+        success: function () { return "Pin dropped on Swayambhunath! You'll use this same press and hold to add a missing place in Baato."; },
+        retry: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> away from Swayambhunath. Look for its name on the map and try again."; },
+        reveal: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> away. The <b>green circle</b> shows Swayambhunath: press and hold inside it."; }
+      });
+    }
+  },
+
+  /* Find TU Cricket Stadium, tap it, get directions, compare travel modes */
+  route: {
+    view: { center: [85.3200, 27.6740], zoom: 14 },
+    tall: true,
+    run: function (map, fb, box) {
+      var you = setup.places.patan, dest = setup.places.stadium, found = false, seen = {}, mode = "car";
+      setup.youDot(map, you, "You");
+      var panel = setup.panel(box, "bottom hidden");
+      var h1 = setTimeout(function () { if (!found) { fb.say("Hint: TU Cricket Stadium is in <b>Kirtipur</b>, to the <b>west</b> (left) of Patan. Once you're close, zoom in to see its name."); } }, 25000);
+      fb.say("<b>Step 1:</b> find <b>TU Cricket Stadium</b> on the map and tap it.");
+
+      map.on("click", function (e) {
+        if (found) { return; }
+        if (e.lngLat.distanceTo(setup.ll(dest)) <= 180 && map.getZoom() >= 13.5) {
+          found = true; clearTimeout(h1);
+          setup.labelMarker(map, dest, dest.name);
+          panel.classList.remove("hidden");
+          panel.innerHTML = '<div class="pl-title">TU Cricket Stadium</div><button class="pl-btn" data-act="go">Directions from your location</button>';
+          fb.say("<b>Step 2:</b> tap <b>Directions</b> to get a route from Patan Durbar Square.");
+        } else if (map.getZoom() < 13.5) {
+          fb.miss("Zoom in a little more so you can see place names, then tap the stadium.");
+        } else {
+          fb.miss("That's not TU Cricket Stadium. Keep looking, or wait for a hint.");
+        }
+      });
+
+      function show(m) {
+        mode = m;
+        panel.querySelectorAll(".mode").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-mode") === m); });
+        panel.querySelector(".pl-sum").textContent = "Loading route…";
+        setup.getRoute(you, dest, m).then(function (r) {
+          if (mode !== m) { return; }
+          setup.drawRoute(map, r, setup.MODE_COLOR[m]);
+          setup.fitRoute(map, r);
+          seen[m] = r;
+          panel.querySelector(".pl-sum").innerHTML = "<b>" + setup.MODES[m] + ":</b> " + setup.fmtDist(r.dist) + " · " + setup.fmtTime(r.time);
+          var n = Object.keys(seen).length;
+          if (n < 3) {
+            fb.say("<b>Step 3:</b> now try the other ways to travel. Tap " + Object.keys(setup.MODES).filter(function (k) { return !seen[k]; }).map(function (k) { return "<b>" + setup.MODES[k] + "</b>"; }).join(" and ") + ".");
+          } else {
+            var rows = Object.keys(setup.MODES).map(function (k) { return "<tr><td>" + setup.MODES[k] + "</td><td>" + setup.fmtDist(seen[k].dist) + "</td><td>" + setup.fmtTime(seen[k].time) + "</td></tr>"; }).join("");
+            fb.done("Notice how the route changes with how you travel. Walking can use small lanes and paths that cars can't, and each way of travelling takes a different amount of time.<table class=\"cmp\">" + rows + "</table>");
+          }
+        }).catch(function () {
+          panel.querySelector(".pl-sum").textContent = "Couldn't get directions. Check your internet connection.";
+        });
+      }
+      panel.addEventListener("click", function (ev) {
+        var t = ev.target.closest("button"); if (!t) { return; }
+        if (t.getAttribute("data-act") === "go") {
+          panel.innerHTML = '<div class="modes">' + Object.keys(setup.MODES).map(function (k) { return '<button class="mode" data-mode="' + k + '">' + setup.MODES[k] + '</button>'; }).join("") + '</div><div class="pl-sum"></div>';
+          show("car");
+        } else if (t.getAttribute("data-mode")) { show(t.getAttribute("data-mode")); }
+      });
+      return function () { clearTimeout(h1); };
+    }
+  },
+
+  /* Simulated walk with turn-by-turn directions, time estimate and Recenter */
+  live: {
+    view: { center: [85.32506, 27.6734], zoom: 15.5 },
+    tall: true,
+    run: function (map, fb, box) {
+      var you = setup.places.patan, dest = setup.places.stadium;
+      var route = null, mode = null, pos = 0, follow = true, timer = null, stage = 1, marker = null, hint = null;
+      var SPEED = 18;   /* simulated metres per second (sped up so the demo moves) */
+      var top = setup.panel(box, "top hidden"), bottom = setup.panel(box, "bottom");
+      var recenter = document.createElement("button");
+      recenter.className = "recenter hidden"; recenter.textContent = "◎ Recenter";
+      box.appendChild(recenter);
+      marker = setup.youDot(map, you, "");
+      setup.labelMarker(map, dest, dest.name);
+      bottom.innerHTML = '<div class="pl-title">Route to TU Cricket Stadium</div><div class="modes">' + Object.keys(setup.MODES).map(function (k) { return '<button class="mode" data-mode="' + k + '">' + setup.MODES[k] + '</button>'; }).join("") + '</div><button class="pl-btn" data-act="start" disabled>Start</button>';
+      fb.say("<b>Step 1:</b> choose <b>Walk</b>, then tap <b>Start</b>.");
+
+      function pick(m) {
+        mode = m;
+        bottom.querySelectorAll(".mode").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-mode") === m); });
+        var start = bottom.querySelector("[data-act=start]");
+        start.disabled = true; start.textContent = "Loading…";
+        setup.getRoute(you, dest, m).then(function (r) {
+          if (mode !== m) { return; }
+          route = r; setup.drawRoute(map, r, setup.MODE_COLOR[m]); setup.fitRoute(map, r);
+          start.disabled = false; start.textContent = "Start · " + setup.fmtDist(r.dist) + " · " + setup.fmtTime(r.time);
+          if (m !== "foot") { fb.say("For this practice, choose <b>Walk</b>, then tap <b>Start</b>."); }
+        }).catch(function () { start.textContent = "Couldn't get directions"; });
+      }
+      function update() {
+        var p = setup.pointAt(route, pos);
+        marker.setLngLat(p);
+        if (follow) { map.jumpTo({ center: p }); }
+        var next = null;
+        for (var i = 0; i < route.steps.length; i++) { if (route.steps[i].at > pos + 1) { next = route.steps[i]; break; } }
+        if (!next) { next = { sign: 4, name: "", landmark: "", at: route.dist }; }
+        var left = Math.max(0, route.dist - pos);
+        top.innerHTML = '<div class="nav-icon">' + setup.turnIcon(next.sign) + '</div><div class="nav-txt"><div class="nav-dist">' +
+          (left < 5 ? "You have arrived" : "In " + setup.fmtDist(next.at - pos)) + '</div><div>' + (left < 5 ? "" : setup.turnText(next)) +
+          (next.landmark && left >= 5 ? '<div class="nav-lm">near ' + next.landmark + '</div>' : "") + '</div></div>';
+        bottom.innerHTML = '<div class="nav-eta"><b>' + setup.fmtTime(route.time * left / route.dist) + '</b> · ' + setup.fmtDist(left) + ' left</div><div class="sim-note">Practice walk (sped up)</div>';
+        if (left < 5) { clearInterval(timer); }
+      }
+      bottom.addEventListener("click", function (ev) {
+        var t = ev.target.closest("button"); if (!t) { return; }
+        if (t.getAttribute("data-mode")) { pick(t.getAttribute("data-mode")); }
+        else if (t.getAttribute("data-act") === "start" && route) {
+          if (mode !== "foot") { fb.miss("For this practice, choose <b>Walk</b> first."); return; }
+          top.classList.remove("hidden");
+          map.jumpTo({ zoom: 17, center: route.coords[0] });
+          timer = setInterval(function () { pos += SPEED / 10; update(); }, 100);
+          update();
+          fb.say("<b>Step 2:</b> the top banner shows the <b>distance to your next turn</b>, often with a nearby <b>landmark</b>. The bottom shows the <b>time left</b> and distance left.");
+          hint = setTimeout(function () { if (stage === 1) { stage = 2; fb.say("<b>Step 3:</b> now drag the map away from your location."); } }, 9000);
+        }
+      });
+      map.on("dragstart", function (e) {
+        if (!timer || !e.originalEvent) { return; }
+        follow = false; stage = 3; clearTimeout(hint);
+        recenter.classList.remove("hidden");
+        fb.say("The map stopped following you. <b>Step 4:</b> tap <b>Recenter</b> to go back to your location.");
+      });
+      recenter.addEventListener("click", function () {
+        follow = true; recenter.classList.add("hidden");
+        map.easeTo({ center: setup.pointAt(route, pos), zoom: 17, duration: 500 });
+        fb.done("Recenter brings the map back to where you are, so you can look around and then find yourself again.");
+      });
+      return function () { clearInterval(timer); clearTimeout(hint); };
+    }
+  },
+
+  /* Spatial Thinking 1: location dot, compass, question about Bir Hospital */
+  st1: {
+    view: { center: [85.31385, 27.70525], zoom: 17.3 },
+    run: function (map) { setup.youDot(map, setup.places.st1You, "You"); }
+  },
+
+  /* Spatial Thinking 2: turn the map until the fixed arrow points at the roundabout */
+  st2: {
+    view: { center: [setup.places.st2You.lng, setup.places.st2You.lat], zoom: 18, bearing: 120 },
+    run: function (map, fb, box) {
+      var you = setup.places.st2You, rb = setup.places.roundabout, tries = 0;
+      /* keep the photo spot in the middle: no panning, zoom/rotate around the centre */
+      map.dragPan.disable();
+      map.scrollZoom.enable({ around: "center" });
+      map.touchZoomRotate.enable({ around: "center" });
+      var arrow = document.createElement("div");
+      arrow.className = "fixed-arrow";
+      arrow.innerHTML = '<svg viewBox="0 0 52 52" width="52" height="52"><path d="M26 1 L38 22 L14 22 Z" fill="#2a6fdb" stroke="#fff" stroke-width="2"/><circle cx="26" cy="26" r="10" fill="#2a6fdb" stroke="#fff" stroke-width="3"/></svg>';
+      box.appendChild(arrow);
+      var ctl = setup.panel(box, "bottom", '<div class="turns"><button data-turn="-15">↺ Turn left</button><button data-turn="15">Turn right ↻</button></div><button class="pl-btn" data-act="check">Check my answer</button>');
+      function bearingTo(a, b) {
+        var y = Math.sin((b.lng - a.lng) * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180);
+        var x = Math.cos(a.lat * Math.PI / 180) * Math.sin(b.lat * Math.PI / 180) - Math.sin(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.cos((b.lng - a.lng) * Math.PI / 180);
+        return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+      }
+      var goal = bearingTo(you, rb);
+      ctl.addEventListener("click", function (ev) {
+        var t = ev.target.closest("button"); if (!t || fb.isDone()) { return; }
+        if (t.getAttribute("data-turn")) { map.easeTo({ bearing: map.getBearing() + (+t.getAttribute("data-turn")), duration: 250 }); return; }
+        var diff = ((goal - map.getBearing()) % 360 + 540) % 360 - 180;
+        if (Math.abs(diff) <= setup.ST2_TOLERANCE_DEG) {
+          fb.done("Correct! The arrow now points the same way the camera was facing: straight at the roundabout.");
+        } else {
+          tries++;
+          if (tries >= 3) {
+            map.easeTo({ bearing: goal, duration: 700 });
+            fb.done("Here's the answer: we turned the map so the arrow points at the roundabout, the way the camera was facing when the photo was taken.");
+          } else {
+            fb.miss("Not quite. Keep turning <b>" + (diff > 0 ? "right" : "left") + "</b>. Look for the roundabout on the map near the arrow.");
+          }
+        }
+      });
+    }
+  },
+
+  /* Spatial Thinking 3: drop a pin where the photo was taken */
+  st3: {
+    view: { center: [85.31365, 27.70305], zoom: 17.5 },
+    run: function (map, fb) {
+      return setup.pinTask(map, fb, {
+        target: setup.places.st3Spot, radius: setup.ST3_RADIUS_M, revealAfter: 3, revealIsAnswer: true,
+        success: function (d) { return "Great spotting! Your pin is only <b>" + setup.fmtDist(d) + "</b> from where the photo was taken."; },
+        retry: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> from where the photo was taken. Look at the shape of the roads and the median, and try again."; },
+        reveal: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> away. The <b>green pin</b> shows where the photo was really taken from."; }
+      });
+    }
+  }
+};
+
+/* ---------- Start and clean up maps as pages change ---------- */
+setup.activeMap = null;
+$(document).on(":passagestart", function () {
+  if (setup.activeMap) {
+    try { if (setup.activeMap.cleanup) { setup.activeMap.cleanup(); } setup.activeMap.map.remove(); } catch (e) {}
+    setup.activeMap = null;
+  }
+});
+$(document).on(":passagedisplay", function () {
+  var box = document.querySelector("#passages .mapbox");
+  if (box) { setup.startMap(box); }
+});
+setup.mapFailed = function (box) {
+  box.innerHTML = '<div class="mapfail">The map couldn\'t load. Check your internet connection, or tap <b>Skip this task</b> to continue.</div>';
+};
+setup.startMap = function (box) {
+  var task = setup.mapTasks[box.getAttribute("data-task")];
+  var fb = setup.makeFeedback();
+  if (!task) { return; }
+  if (task.tall) { box.classList.add("tall"); }
+  setup.mapReady.then(function () {
+    if (!document.body.contains(box)) { return; }
+    var opts = Object.assign({ container: box, style: setup.BAATO_STYLE, attributionControl: false, maxPitch: 60 }, task.view);
+    var map = new maplibregl.Map(opts), loaded = false;
+    map.addControl(new maplibregl.AttributionControl({ compact: true,
+      customAttribution: '© <a href="https://baato.io" target="_blank">Baato</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>' }));
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    setup.activeMap = { map: map };
+    map.on("load", function () {
+      loaded = true;
+      var cleanup = task.run(map, fb, box);
+      if (typeof cleanup === "function" && setup.activeMap) { setup.activeMap.cleanup = cleanup; }
+    });
+    map.on("error", function () { if (!loaded) { map.remove(); setup.activeMap = null; setup.mapFailed(box); } });
+  }).catch(function () { setup.mapFailed(box); });
+};
+
 
 /* ---------- One line = one paragraph ---------- */
 Config.passages.onProcess = function (p) {
@@ -379,7 +955,7 @@ $(document).on(":passagerender", function (ev) {
     img.src = setup.IMG_BASE + file;
     box.insertBefore(img, box.firstChild);
   });
-});</script><tw-tag name="add" color="yellow"></tw-tag><tw-tag name="road" color="red"></tw-tag><tw-tag name="wrap" color="purple"></tw-tag><tw-tag name="intro" color="green"></tw-tag><tw-tag name="edit" color="orange"></tw-tag><tw-passagedata pid="1" name="PassageHeader" tags="" position="100,100" size="100,100">&lt;&lt;print setup.header()&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="PassageFooter" tags="" position="225,100" size="100,100">&lt;&lt;if setup.prev()&gt;&gt;&lt;div class=&quot;backrow&quot;&gt;&lt;&lt;link &quot;‹ Back&quot; `setup.prev()`&gt;&gt;&lt;&lt;/link&gt;&gt;&lt;/div&gt;&lt;&lt;/if&gt;&gt;</tw-passagedata><tw-passagedata pid="3" name="Widgets" tags="widget" position="350,100" size="100,100">/* Image:  &lt;&lt;img &quot;File.jpg&quot;&gt;&gt;   or with a description for screen readers:
+});</script><tw-tag name="wrap" color="purple"></tw-tag><tw-tag name="intro" color="green"></tw-tag><tw-tag name="maps" color="blue"></tw-tag><tw-tag name="edit" color="orange"></tw-tag><tw-tag name="add" color="yellow"></tw-tag><tw-tag name="road" color="red"></tw-tag><tw-passagedata pid="1" name="PassageHeader" tags="" position="100,100" size="100,100">&lt;&lt;print setup.header()&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="PassageFooter" tags="" position="225,100" size="100,100">&lt;&lt;if setup.prev()&gt;&gt;&lt;div class=&quot;backrow&quot;&gt;&lt;&lt;link &quot;‹ Back&quot; `setup.prev()`&gt;&gt;&lt;&lt;/link&gt;&gt;&lt;/div&gt;&lt;&lt;/if&gt;&gt;</tw-passagedata><tw-passagedata pid="3" name="Widgets" tags="widget" position="350,100" size="100,100">/* Image:  &lt;&lt;img &quot;File.jpg&quot;&gt;&gt;   or with a description for screen readers:
            &lt;&lt;img &quot;File.jpg&quot; &quot;Baato sign-in screen&quot;&gt;&gt;
    Files come from the image repo set in the Story JavaScript. */
 &lt;&lt;widget &quot;img&quot;&gt;&gt;
@@ -398,6 +974,35 @@ $(document).on(":passagerender", function (ev) {
 &lt;div class=&quot;row pro&quot;&gt;&lt;span class=&quot;tag&quot;&gt;Pros&lt;/span&gt;&lt;span&gt;_args[1]&lt;/span&gt;&lt;/div&gt;
 &lt;div class=&quot;row con&quot;&gt;&lt;span class=&quot;tag&quot;&gt;Cons&lt;/span&gt;&lt;span&gt;_args[2]&lt;/span&gt;&lt;/div&gt;
 &lt;/div&gt;
+&lt;&lt;/widget&gt;&gt;
+
+/* Skip link for practice tasks: reveals the Next button */
+&lt;&lt;widget &quot;skip&quot;&gt;&gt;
+&lt;span class=&quot;skip&quot;&gt;&lt;&lt;link &quot;Skip this task&quot;&gt;&gt;&lt;&lt;run $(&quot;#next&quot;).removeClass(&quot;hidden&quot;)&gt;&gt;&lt;&lt;/link&gt;&gt;&lt;/span&gt;
+&lt;&lt;/widget&gt;&gt;
+
+/* Correct/incorrect question:  &lt;&lt;answer &quot;Answer text&quot; true|false &quot;Feedback for this answer&quot;&gt;&gt;
+   Put  &lt;&lt;set _correct to &quot;The answer is: ...&quot;&gt;&gt;  at the top of the passage.
+   (Don&#39;t rename this widget &quot;choice&quot;: SugarCube has an old built-in macro with that name.) */
+&lt;&lt;widget &quot;answer&quot;&gt;&gt;
+&lt;&lt;set _id to &quot;ans&quot; + random(1, 1e9)&gt;&gt;
+&lt;&lt;capture _args _id&gt;&gt;
+&lt;div class=&quot;answers&quot;&gt;&lt;div class=&quot;actions&quot; @id=&quot;_id&quot;&gt;&lt;&lt;link _args[0]&gt;&gt;
+&lt;&lt;if _args[1]&gt;&gt;
+&lt;&lt;replace &quot;#feedback&quot;&gt;&gt;&lt;div class=&quot;fb right&quot;&gt;_args[2]&lt;/div&gt;&lt;&lt;/replace&gt;&gt;
+&lt;&lt;removeclass &quot;#next&quot; &quot;hidden&quot;&gt;&gt;
+&lt;&lt;else&gt;&gt;
+&lt;&lt;set _misses to (_misses || 0) + 1&gt;&gt;
+&lt;&lt;addclass `&quot;#&quot; + _id` &quot;picked-wrong&quot;&gt;&gt;
+&lt;&lt;if _misses gte 2&gt;&gt;
+&lt;&lt;replace &quot;#feedback&quot;&gt;&gt;&lt;div class=&quot;fb wrong&quot;&gt;_args[2] &lt;&lt;print _correct&gt;&gt;&lt;/div&gt;&lt;&lt;/replace&gt;&gt;
+&lt;&lt;removeclass &quot;#next&quot; &quot;hidden&quot;&gt;&gt;
+&lt;&lt;else&gt;&gt;
+&lt;&lt;replace &quot;#feedback&quot;&gt;&gt;&lt;div class=&quot;fb wrong&quot;&gt;_args[2] Try again.&lt;/div&gt;&lt;&lt;/replace&gt;&gt;
+&lt;&lt;/if&gt;&gt;
+&lt;&lt;/if&gt;&gt;
+&lt;&lt;/link&gt;&gt;&lt;/div&gt;&lt;/div&gt;
+&lt;&lt;/capture&gt;&gt;
 &lt;&lt;/widget&gt;&gt;</tw-passagedata><tw-passagedata pid="4" name="Cover" tags="" position="475,100" size="100,100">&lt;div class=&quot;cover big&quot;&gt;
 &lt;h1 class=&quot;title&quot;&gt;Baato Maps Contribution Module&lt;/h1&gt;
 &lt;&lt;img &quot;Baato_wpi.jpg&quot;&gt;&gt;
@@ -407,7 +1012,9 @@ This module goes over the importance of &#39;&#39;map data contribution&#39;&#39
 The entire thing should take about &#39;&#39;10-15 minutes&#39;&#39; to complete.
 [[Let’s get started!-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="6" name="Landing Page" tags="" position="725,100" size="100,100">&#39;&#39;First time&#39;&#39; here? Please start with the &#39;&#39;Introduction&#39;&#39; section.
 [[Introduction-&gt;Introduction Page]]
-Or jump to any of the &#39;&#39;how-to sections&#39;&#39; below.
+Want to learn more about &#39;&#39;digital maps&#39;&#39; and &#39;&#39;spatial reasoning&#39;&#39;? Continue to &#39;&#39;Using Digital Maps&#39;&#39; below!
+[[Using Digital Maps-&gt;Using Digital Maps: Zooming in/out]]
+Or jump to any of these &#39;&#39;how-to sections&#39;&#39;.
 [[Editing Data-&gt;Editing Data Logging Into Baato]]
 [[Adding Data-&gt;Adding Data Logging Into Baato]]
 [[Road Data-&gt;Road Data Logging Into Baato]]
@@ -457,102 +1064,177 @@ That’s the power of local data contribution!
 &lt;&lt;img &quot;Baato_homescreen.jpg&quot;&gt;&gt;
 Let’s see how simple it is to &#39;&#39;contribute data&#39;&#39; to this map!
 Press &#39;&#39;Return&#39;&#39; below and go through each &#39;&#39;how-to section&#39;&#39;.
-[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="15" name="Editing Data Logging Into Baato" tags="edit" position="600,225" size="100,100">The first thing you need to do before making any contributions is making a &#39;&#39;Baato Maps Account&#39;&#39;.
+[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="15" name="Using Digital Maps: Zooming in/out" tags="maps" position="600,225" size="100,100">&#39;&#39;Zoom in&#39;&#39; until you can see street names, then &#39;&#39;zoom out&#39;&#39; until you can see the whole city.
+&lt;p class=&quot;how touch-only&quot;&gt;Pinch two fingers apart to zoom in, and together to zoom out. You can also use the + and − buttons.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;Scroll the mouse wheel, or use the + and − buttons.&lt;/p&gt;
+&lt;div class=&quot;mapbox&quot; data-task=&quot;zoom&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Panning/Dragging/City knowledge]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="16" name="Using Digital Maps: Panning/Dragging/City knowledge" tags="maps" position="725,225" size="100,100">Move and zoom the map until &#39;&#39;Dharahara&#39;&#39; is on your screen.
+&lt;p class=&quot;how touch-only&quot;&gt;Put one finger on the map and slide it to move around.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;Click and hold on the map, then drag to move around.&lt;/p&gt;
+&lt;div class=&quot;mapbox&quot; data-task=&quot;pan&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Rotating/compass]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="17" name="Using Digital Maps: Rotating/compass" tags="maps" position="850,225" size="100,100">First, &#39;&#39;turn the map&#39;&#39; so that north is no longer at the top. Then tap the &#39;&#39;compass&#39;&#39; to turn it back.
+&lt;p class=&quot;how touch-only&quot;&gt;To turn the map, put two fingers on it and twist them.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;To turn the map, hold the right mouse button (or Ctrl) and drag left or right.&lt;/p&gt;
+&lt;div class=&quot;mapbox&quot; data-task=&quot;rotate&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Drop a pin]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="18" name="Using Digital Maps: Drop a pin" tags="maps" position="975,225" size="100,100">&#39;&#39;Press and hold&#39;&#39; on &#39;&#39;Swayambhunath&#39;&#39; to drop a pin there.
+&lt;p class=&quot;how touch-only&quot;&gt;Keep your finger still on the spot for about a second.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;Click and hold without moving the mouse for about a second.&lt;/p&gt;
+&lt;div class=&quot;mapbox&quot; data-task=&quot;pin&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Making a route]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="19" name="Using Digital Maps: Making a route" tags="maps" position="1100,225" size="100,100">You are at &#39;&#39;Patan Durbar Square&#39;&#39;. Find &#39;&#39;TU Cricket Stadium&#39;&#39;, tap it, and get directions there.
+&lt;div class=&quot;mapbox&quot; data-task=&quot;route&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Live routing features]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="20" name="Using Digital Maps: Live routing features" tags="maps" position="1225,225" size="100,100">Now let’s try &#39;&#39;live routing&#39;&#39;, where the map guides you step by step.
+&lt;div class=&quot;mapbox&quot; data-task=&quot;live&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Spatial Thinking 1]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="21" name="Using Digital Maps: Spatial Thinking 1" tags="maps" position="100,350" size="100,100">&lt;&lt;set _correct to &quot;The answer is: West.&quot;&gt;&gt;
+This photo was taken from the &#39;&#39;blue dot&#39;&#39; on the map below.
+&lt;&lt;img &quot;Bir_hospital.jpg&quot; &quot;Bir Hospital seen from across the road&quot;&gt;&gt;
+Use the &#39;&#39;compass&#39;&#39; on the map to work out directions. Which direction is &#39;&#39;Bir Hospital&#39;&#39; from you?
+&lt;div class=&quot;mapbox&quot; data-task=&quot;st1&quot;&gt;&lt;/div&gt;
+&lt;&lt;answer &quot;North&quot; false &quot;Not quite. Find Bir Hospital’s name on the map, then compare it with the compass.&quot;&gt;&gt;
+&lt;&lt;answer &quot;East&quot; false &quot;Not quite. Find Bir Hospital’s name on the map, then compare it with the compass.&quot;&gt;&gt;
+&lt;&lt;answer &quot;South&quot; false &quot;Not quite. Find Bir Hospital’s name on the map, then compare it with the compass.&quot;&gt;&gt;
+&lt;&lt;answer &quot;West&quot; true &quot;Correct! Bir Hospital is west of you, across the road.&quot;&gt;&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Spatial Thinking 2]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="22" name="Using Digital Maps: Spatial Thinking 2" tags="maps" position="225,350" size="100,100">This photo was taken from the &#39;&#39;blue arrow&#39;&#39; on the map below.
+&lt;&lt;img &quot;Roundabout.jpg&quot; &quot;Statue on a roundabout, with shops behind it&quot;&gt;&gt;
+&#39;&#39;Turn the map&#39;&#39; until the arrow points the way the camera was facing: straight at the &#39;&#39;roundabout&#39;&#39;. Then tap &#39;&#39;Check my answer&#39;&#39;.
+&lt;p class=&quot;how touch-only&quot;&gt;Twist two fingers on the map, or use the Turn buttons.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;Hold the right mouse button (or Ctrl) and drag, or use the Turn buttons.&lt;/p&gt;
+&lt;div class=&quot;mapbox&quot; data-task=&quot;st2&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+[[Next-&gt;Using Digital Maps: Spatial Thinking 3]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="23" name="Using Digital Maps: Spatial Thinking 3" tags="maps" position="350,350" size="100,100">Where was this photo taken from?
+&lt;&lt;img &quot;Triangle_median.jpg&quot; &quot;Busy road with a triangle-shaped median in front of a tall building&quot;&gt;&gt;
+&#39;&#39;Press and hold&#39;&#39; on the map to drop a pin where you think the photo was &#39;&#39;taken from&#39;&#39;.
+&lt;div class=&quot;mapbox&quot; data-task=&quot;st3&quot;&gt;&lt;/div&gt;
+&lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
+&lt;&lt;skip&gt;&gt;
+&lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
+Now you know &#39;&#39;how digital maps work&#39;&#39; and how they &#39;&#39;relate to the world&#39;&#39;.
+[[Return-&gt;Landing Page]]
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="24" name="Editing Data Logging Into Baato" tags="edit" position="475,350" size="100,100">The first thing you need to do before making any contributions is making a &#39;&#39;Baato Maps Account&#39;&#39;.
 &lt;&lt;img &quot;Baato_signin.jpg&quot;&gt;&gt;
 &lt;div class=&quot;note&quot;&gt;NOTE: This sign in screen may look slightly different for different devices.&lt;/div&gt;
 You can sign in by linking another account you already have, like a Google account.
 Now let’s get into how to &#39;&#39;edit data&#39;&#39; on Baato Maps!
-[[Next-&gt;Editing Data Setup]]</tw-passagedata><tw-passagedata pid="16" name="Editing Data Setup" tags="edit" position="725,225" size="100,100">Let’s say you are having trouble finding a hotel, &#39;&#39;Tejshree Apartment Hotel&#39;&#39;.
+[[Next-&gt;Editing Data Setup]]</tw-passagedata><tw-passagedata pid="25" name="Editing Data Setup" tags="edit" position="600,350" size="100,100">Let’s say you are having trouble finding a hotel, &#39;&#39;Tejshree Apartment Hotel&#39;&#39;.
 After some walking around, you finally find the hotel, and realize it was difficult to find because its location is &#39;&#39;incorrect&#39;&#39;.
 &lt;div class=&quot;pair&quot;&gt;
 &lt;&lt;img &quot;Editing_map.jpg&quot;&gt;&gt;
 &lt;&lt;img &quot;Editing_photo.jpg&quot;&gt;&gt;
 &lt;/div&gt;
 Here’s how you can &#39;&#39;fix&#39;&#39; the hotel’s location in Baato Maps.
-[[Next-&gt;Editing Data Step 1]]</tw-passagedata><tw-passagedata pid="17" name="Editing Data Step 1" tags="edit" position="850,225" size="100,100">&lt;&lt;step 1&gt;&gt;
+[[Next-&gt;Editing Data Step 1]]</tw-passagedata><tw-passagedata pid="26" name="Editing Data Step 1" tags="edit" position="725,350" size="100,100">&lt;&lt;step 1&gt;&gt;
 Tap the location, swipe up, and tap &#39;&#39;Edit location&#39;&#39;.
 &lt;&lt;img &quot;Editing_step_1.jpg&quot;&gt;&gt;
-[[Next-&gt;Editing Data Step 2]]</tw-passagedata><tw-passagedata pid="18" name="Editing Data Step 2" tags="edit" position="975,225" size="100,100">&lt;&lt;step 2&gt;&gt;
+[[Next-&gt;Editing Data Step 2]]</tw-passagedata><tw-passagedata pid="27" name="Editing Data Step 2" tags="edit" position="850,350" size="100,100">&lt;&lt;step 2&gt;&gt;
 Update the information you want to correct.
 &lt;&lt;img &quot;Editing_step_2.jpg&quot;&gt;&gt;
 In our case, let’s scroll down and tap &#39;&#39;Change location&#39;&#39;.
-[[Next-&gt;Editing Data Step 3]]</tw-passagedata><tw-passagedata pid="19" name="Editing Data Step 3" tags="edit" position="1100,225" size="100,100">&lt;&lt;step 3&gt;&gt;
+[[Next-&gt;Editing Data Step 3]]</tw-passagedata><tw-passagedata pid="28" name="Editing Data Step 3" tags="edit" position="975,350" size="100,100">&lt;&lt;step 3&gt;&gt;
 Move the pin to the correct location, then tap &#39;&#39;Choose&#39;&#39;.
 &lt;&lt;img &quot;Editing_step_3.jpg&quot;&gt;&gt;
-[[Next-&gt;Editing Data Step 4]]</tw-passagedata><tw-passagedata pid="20" name="Editing Data Step 4" tags="edit" position="1225,225" size="100,100">&lt;&lt;step 4&gt;&gt;
+[[Next-&gt;Editing Data Step 4]]</tw-passagedata><tw-passagedata pid="29" name="Editing Data Step 4" tags="edit" position="1100,350" size="100,100">&lt;&lt;step 4&gt;&gt;
 Tap &#39;&#39;Add Image&#39;&#39; and upload a picture of the hotel’s entrance.
 &lt;&lt;img &quot;Editing_step_4.jpg&quot;&gt;&gt;
 This is &#39;&#39;very important&#39;&#39;, because Baato Maps needs an image to &#39;&#39;verify&#39;&#39; that the change you are making is &#39;&#39;correct&#39;&#39;.
-[[Next-&gt;Editing Data Step 5]]</tw-passagedata><tw-passagedata pid="21" name="Editing Data Step 5" tags="edit" position="100,350" size="100,100">&lt;&lt;step 5&gt;&gt;
+[[Next-&gt;Editing Data Step 5]]</tw-passagedata><tw-passagedata pid="30" name="Editing Data Step 5" tags="edit" position="1225,350" size="100,100">&lt;&lt;step 5&gt;&gt;
 Tap &#39;&#39;Upload&#39;&#39; so your edit can be verified and approved!
 &lt;&lt;img &quot;Editing_step_5.jpg&quot;&gt;&gt;
-[[Next-&gt;Editing Data Success]]</tw-passagedata><tw-passagedata pid="22" name="Editing Data Success" tags="edit" position="225,350" size="100,100">And just like that, you’ve made a &#39;&#39;meaningful contribution!&#39;&#39;
+[[Next-&gt;Editing Data Success]]</tw-passagedata><tw-passagedata pid="31" name="Editing Data Success" tags="edit" position="100,475" size="100,100">And just like that, you’ve made a &#39;&#39;meaningful contribution!&#39;&#39;
 &lt;&lt;img &quot;Editing_success.jpg&quot;&gt;&gt;
-[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="23" name="Adding Data Logging Into Baato" tags="add" position="350,350" size="100,100">The first thing you need to do before making any contributions is making a &#39;&#39;Baato Maps Account&#39;&#39;.
+[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="32" name="Adding Data Logging Into Baato" tags="add" position="225,475" size="100,100">The first thing you need to do before making any contributions is making a &#39;&#39;Baato Maps Account&#39;&#39;.
 &lt;&lt;img &quot;Baato_signin.jpg&quot;&gt;&gt;
 &lt;div class=&quot;note&quot;&gt;NOTE: This sign in screen may look slightly different for different devices.&lt;/div&gt;
 You can sign in by linking another account you already have, like a Google account.
 Now let’s get into how to &#39;&#39;add data&#39;&#39; to Baato Maps!
-[[Next-&gt;Adding Data Setup]]</tw-passagedata><tw-passagedata pid="24" name="Adding Data Setup" tags="add" position="475,350" size="100,100">Let’s say there is a cafe in your neighborhood that isn’t shown on Baato Maps.
+[[Next-&gt;Adding Data Setup]]</tw-passagedata><tw-passagedata pid="33" name="Adding Data Setup" tags="add" position="350,475" size="100,100">Let’s say there is a cafe in your neighborhood that isn’t shown on Baato Maps.
 &lt;div class=&quot;pair&quot;&gt;
 &lt;&lt;img &quot;Adding_map.jpg&quot;&gt;&gt;
 &lt;&lt;img &quot;Adding_photo.jpg&quot;&gt;&gt;
 &lt;/div&gt;
 This is a great opportunity to &#39;&#39;add&#39;&#39; a location to Baato Maps so that you and others in your area can find it.
-[[Next-&gt;Adding Data Step 1]]</tw-passagedata><tw-passagedata pid="25" name="Adding Data Step 1" tags="add" position="600,350" size="100,100">&lt;&lt;step 1&gt;&gt;
+[[Next-&gt;Adding Data Step 1]]</tw-passagedata><tw-passagedata pid="34" name="Adding Data Step 1" tags="add" position="475,475" size="100,100">&lt;&lt;step 1&gt;&gt;
 &#39;&#39;Press and hold&#39;&#39; the location on the map where the missing data point is to &#39;&#39;drop a pin&#39;&#39; there.
 &lt;&lt;img &quot;Adding_step_1.jpg&quot;&gt;&gt;
 In our case, we’ll press where the cafe should be located.
-[[Next-&gt;Adding Data Step 2]]</tw-passagedata><tw-passagedata pid="26" name="Adding Data Step 2" tags="add" position="725,350" size="100,100">&lt;&lt;step 2&gt;&gt;
+[[Next-&gt;Adding Data Step 2]]</tw-passagedata><tw-passagedata pid="35" name="Adding Data Step 2" tags="add" position="600,475" size="100,100">&lt;&lt;step 2&gt;&gt;
 Swipe up and tap &#39;&#39;Edit Location&#39;&#39;, just like you would for editing an existing location.
 &lt;&lt;img &quot;Adding_Step_2.jpg&quot;&gt;&gt;
-[[Next-&gt;Adding Data Step 3]]</tw-passagedata><tw-passagedata pid="27" name="Adding Data Step 3" tags="add" position="850,350" size="100,100">&lt;&lt;step 3&gt;&gt;
+[[Next-&gt;Adding Data Step 3]]</tw-passagedata><tw-passagedata pid="36" name="Adding Data Step 3" tags="add" position="725,475" size="100,100">&lt;&lt;step 3&gt;&gt;
 Fill in as much data as you can! Be sure to at least add a name and category.
 &lt;&lt;img &quot;Adding_step_3.jpg&quot;&gt;&gt;
 In our case, let’s call it &#39;&#39;Nepa Brew Cafe&#39;&#39; and give it the category &#39;&#39;Cafe&#39;&#39; under &#39;&#39;Food and Drink&#39;&#39;.
-[[Next-&gt;Adding Data Step 4]]</tw-passagedata><tw-passagedata pid="28" name="Adding Data Step 4" tags="add" position="975,350" size="100,100">&lt;&lt;step 4&gt;&gt;
+[[Next-&gt;Adding Data Step 4]]</tw-passagedata><tw-passagedata pid="37" name="Adding Data Step 4" tags="add" position="850,475" size="100,100">&lt;&lt;step 4&gt;&gt;
 Tap &#39;&#39;Add Image&#39;&#39; and upload a picture of the location.
 &lt;&lt;img &quot;Adding_step_4.jpg&quot;&gt;&gt;
 Again, this is &#39;&#39;very important&#39;&#39;, because Baato Maps needs an image to &#39;&#39;verify&#39;&#39; that the place you are adding &#39;&#39;exists&#39;&#39;.
-[[Next-&gt;Adding Data Step 5]]</tw-passagedata><tw-passagedata pid="29" name="Adding Data Step 5" tags="add" position="1100,350" size="100,100">&lt;&lt;step 5&gt;&gt;
+[[Next-&gt;Adding Data Step 5]]</tw-passagedata><tw-passagedata pid="38" name="Adding Data Step 5" tags="add" position="975,475" size="100,100">&lt;&lt;step 5&gt;&gt;
 Tap &#39;&#39;Upload&#39;&#39; so your addition can be verified and approved!
 &lt;&lt;img &quot;Adding_step_5.jpg&quot;&gt;&gt;
-[[Next-&gt;Adding Data Success]]</tw-passagedata><tw-passagedata pid="30" name="Adding Data Success" tags="add" position="1225,350" size="100,100">And just like that, &#39;&#39;another contribution&#39;&#39; down!
+[[Next-&gt;Adding Data Success]]</tw-passagedata><tw-passagedata pid="39" name="Adding Data Success" tags="add" position="1100,475" size="100,100">And just like that, &#39;&#39;another contribution&#39;&#39; down!
 &lt;&lt;img &quot;Adding_success.jpg&quot;&gt;&gt;
 Soon, others will be able to see the &#39;&#39;newly added&#39;&#39; location.
-[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="31" name="Road Data Logging Into Baato" tags="road" position="100,475" size="100,100">The first thing you need to do before making any contributions is making a &#39;&#39;Baato Maps Account&#39;&#39;.
+[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="40" name="Road Data Logging Into Baato" tags="road" position="1225,475" size="100,100">The first thing you need to do before making any contributions is making a &#39;&#39;Baato Maps Account&#39;&#39;.
 &lt;&lt;img &quot;Baato_signin.jpg&quot;&gt;&gt;
 &lt;div class=&quot;note&quot;&gt;NOTE: This sign in screen may look slightly different for different devices.&lt;/div&gt;
 You can sign in by linking another account you already have, like a Google account.
 Now let’s get into how to update &#39;&#39;road data&#39;&#39; on Baato Maps!
-[[Next-&gt;Road Data Setup]]</tw-passagedata><tw-passagedata pid="32" name="Road Data Setup" tags="road" position="225,475" size="100,100">You want to get across town, but your map has taken you to a road that you &#39;&#39;cannot pass&#39;&#39; through.
+[[Next-&gt;Road Data Setup]]</tw-passagedata><tw-passagedata pid="41" name="Road Data Setup" tags="road" position="100,600" size="100,100">You want to get across town, but your map has taken you to a road that you &#39;&#39;cannot pass&#39;&#39; through.
 &lt;div class=&quot;pair&quot;&gt;
 &lt;&lt;img &quot;Road_map.jpg&quot;&gt;&gt;
 &lt;&lt;img &quot;Road_photo.jpg&quot;&gt;&gt;
 &lt;/div&gt;
 Let’s mark it as obstructed on Baato Maps!
-[[Next-&gt;Road Data Step 1]]</tw-passagedata><tw-passagedata pid="33" name="Road Data Step 1" tags="road" position="350,475" size="100,100">&lt;&lt;step 1&gt;&gt;
+[[Next-&gt;Road Data Step 1]]</tw-passagedata><tw-passagedata pid="42" name="Road Data Step 1" tags="road" position="225,600" size="100,100">&lt;&lt;step 1&gt;&gt;
 Swipe up on the Baato main menu and tap &#39;&#39;Add a report&#39;&#39;.
 &lt;&lt;img &quot;Road_step_1.jpg&quot;&gt;&gt;
-[[Next-&gt;Road Data Step 2]]</tw-passagedata><tw-passagedata pid="34" name="Road Data Step 2" tags="road" position="475,475" size="100,100">&lt;&lt;step 2&gt;&gt;
+[[Next-&gt;Road Data Step 2]]</tw-passagedata><tw-passagedata pid="43" name="Road Data Step 2" tags="road" position="350,600" size="100,100">&lt;&lt;step 2&gt;&gt;
 Tap the &#39;&#39;icon&#39;&#39; that corresponds to the report you are making.
 &lt;&lt;img &quot;Road_step_2.jpg&quot;&gt;&gt;
 In our case we will tap &#39;&#39;Road Obstruction&#39;&#39;.
-[[Next-&gt;Road Data Step 3]]</tw-passagedata><tw-passagedata pid="35" name="Road Data Step 3" tags="road" position="600,475" size="100,100">&lt;&lt;step 3&gt;&gt;
+[[Next-&gt;Road Data Step 3]]</tw-passagedata><tw-passagedata pid="44" name="Road Data Step 3" tags="road" position="475,600" size="100,100">&lt;&lt;step 3&gt;&gt;
 Select the sub-category for your report, and include the &#39;&#39;location&#39;&#39;, &#39;&#39;photo&#39;&#39;, and &#39;&#39;additional comments&#39;&#39;.
 &lt;&lt;img &quot;Road_step_3.jpg&quot;&gt;&gt;
 In our case we will select &#39;&#39;Construction&#39;&#39;, and add our relevant information.
-[[Next-&gt;Road Data Step 4]]</tw-passagedata><tw-passagedata pid="36" name="Road Data Step 4" tags="road" position="725,475" size="100,100">&lt;&lt;step 4&gt;&gt;
+[[Next-&gt;Road Data Step 4]]</tw-passagedata><tw-passagedata pid="45" name="Road Data Step 4" tags="road" position="600,600" size="100,100">&lt;&lt;step 4&gt;&gt;
 Scroll down and tap &#39;&#39;Upload&#39;&#39; so your report can be approved!
 &lt;&lt;img &quot;Road_step_4.jpg&quot;&gt;&gt;
-[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="37" name="Account Experience" tags="wrap" position="850,475" size="100,100">Anytime to make a successful contribution, your account will gain &#39;&#39;points&#39;&#39; that allows you to level up!
+[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="46" name="Account Experience" tags="wrap" position="725,600" size="100,100">Anytime to make a successful contribution, your account will gain &#39;&#39;points&#39;&#39; that allows you to level up!
 &lt;&lt;img &quot;Account_contribution.jpg&quot;&gt;&gt;
 Different types of contributions give different points. The more accurate you are with a contribution, the more points you will earn!
-[[Next-&gt;Reflective Conclusion]]</tw-passagedata><tw-passagedata pid="38" name="Reflective Conclusion" tags="wrap" position="975,475" size="100,100">Think about that frustration with maps you had before. Now you have the ability to go out and make that contribution to your community!
+[[Next-&gt;Reflective Conclusion]]</tw-passagedata><tw-passagedata pid="47" name="Reflective Conclusion" tags="wrap" position="850,600" size="100,100">Think about that frustration with maps you had before. Now you have the ability to go out and make that contribution to your community!
 Now get out there and start &#39;&#39;making a difference!&#39;&#39;
 &lt;div class=&quot;big&quot;&gt;
 [[Finish Module-&gt;Module End Page]]
-&lt;/div&gt;</tw-passagedata><tw-passagedata pid="39" name="Module End Page" tags="wrap" position="1100,475" size="100,100">Thank you for taking the time to complete this module.
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="48" name="Module End Page" tags="wrap" position="975,600" size="100,100">Thank you for taking the time to complete this module.
 &lt;&lt;img &quot;Baato_wpi.jpg&quot;&gt;&gt;
 [[Restart-&gt;Cover]]</tw-passagedata></tw-storydata>
 	<script id="script-sugarcube" type="text/javascript">
