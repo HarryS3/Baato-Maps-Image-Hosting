@@ -292,6 +292,12 @@ strong, b { font-weight: 700; color: var(--green-dark); }
 table.cmp { margin-top: 0.5em; border-collapse: collapse; font-size: 0.95em; }
 table.cmp td { padding: 0.15em 0.9em 0.15em 0; }
 
+/* ---------- Step checklist on map pages ---------- */
+.tasks { margin: 0 0 0.6em; }
+.task { position: relative; padding-left: 1.7em; margin: 0 0 0.35em; }
+.task::before { content: ""; position: absolute; left: 0; top: 0.25em; width: 1em; height: 1em; border: 2px solid var(--green); box-sizing: border-box; }
+.task.checked::before { content: "✓"; background: var(--green); color: #fff; font-size: 0.85em; line-height: 0.95em; text-align: center; width: 1.18em; height: 1.18em; top: 0.22em; }
+
 /* ---------- Feedback (map tasks and <<answer>> questions) ---------- */
 .hidden { display: none; }
 #feedback:empty { display: none; }
@@ -423,22 +429,24 @@ setup.places = {
   st2You:    { lng: 85.3092409, lat: 27.7035112 },
   roundabout:{ lng: 85.30914, lat: 27.70366, name: "the roundabout" },
   /* Spatial Thinking 3: where the photo was taken from */
-  st3Spot:   { lng: 85.31319, lat: 27.70275 }
+  st3Spot:   { lng: 85.313672, lat: 27.702939 }
 };
 setup.ST2_TOLERANCE_DEG = 25;   /* how close the arrow must point to the roundabout */
 setup.ST3_RADIUS_M = 10;        /* how close the pin must be to the photo spot */
 
-/* ---------- Feedback box + Next button ---------- */
+/* ---------- Checklist, feedback box and Next button ---------- */
 setup.makeFeedback = function () {
   var finished = false;
-  function show(kind, msg) { $("#feedback").html('<div class="fb ' + kind + '">' + msg + '</div>'); }
+  function show(kind, msg) { $("#feedback").html(msg ? '<div class="fb ' + kind + '">' + msg + '</div>' : ""); }
   return {
+    tick: function (n) { $('.task[data-step="' + n + '"]').addClass("checked"); },
     say:  function (msg) { if (!finished) { show("info", msg); } },
     miss: function (msg) { if (!finished) { show("wrong", msg); } },
     done: function (msg) {
       if (finished) { return; }
       finished = true;
-      show("right", msg);
+      $(".task").addClass("checked");
+      show("right", msg || "");
       $("#next").removeClass("hidden");
     },
     isDone: function () { return finished; }
@@ -506,29 +514,28 @@ setup.onHold = function (map, onHold) {
   return cancel;
 };
 
-/* Pin task shared by "drop a pin" and Spatial Thinking 3 */
+/* Pin task shared by "Drop a pin" and Spatial Thinking 3.
+   o.success / o.retry / o.reveal build the messages from the distance.
+   After o.revealAfter misses: show a circle (hint) or the actual spot (answer). */
 setup.pinTask = function (map, fb, o) {
   var misses = 0, marker = null;
+  function showAnswer() { new maplibregl.Marker({ color: "#1e7a34" }).setLngLat([o.target.lng, o.target.lat]).addTo(map); }
   return setup.onHold(map, function (ll) {
     if (fb.isDone()) { return; }
     if (marker) { marker.remove(); }
     var d = ll.distanceTo(setup.ll(o.target));
     var ok = d <= o.radius;
     marker = new maplibregl.Marker({ color: ok ? "#1e7a34" : "#1F3A3F" }).setLngLat(ll).addTo(map);
-    if (ok) { fb.done(o.success(d)); return; }
+    if (ok) { if (o.showAnswerOnDone) { showAnswer(); } fb.done(o.success(d)); return; }
     misses++;
     if (misses >= o.revealAfter) {
-      setup.targetRing(map, o.target);
-      if (o.revealIsAnswer) {
-        new maplibregl.Marker({ color: "#1e7a34" }).setLngLat([o.target.lng, o.target.lat]).addTo(map);
-        fb.done(o.reveal(d));
-      } else {
+      if (o.revealIsAnswer) { showAnswer(); fb.done(o.reveal(d)); }
+      else {
+        setup.targetRing(map, o.target);
         map.easeTo({ center: [o.target.lng, o.target.lat], zoom: Math.max(map.getZoom(), 16) });
         fb.miss(o.reveal(d));
       }
-    } else {
-      fb.miss(o.retry(d));
-    }
+    } else { fb.miss(o.retry(d)); }
   });
 };
 
@@ -627,7 +634,10 @@ setup.pointAt = function (route, d) {
   return c[c.length - 1];
 };
 
-/* ---------- The practice tasks ---------- */
+/* ---------- The practice tasks ----------
+   Each page lists its steps as  <div class="task" data-step="1">...</div>  lines.
+   fb.tick(n) checks off step n; fb.say/fb.miss show hints; fb.done(msg)
+   checks everything, shows the explanation and reveals Next. */
 setup.mapTasks = {
 
   /* Zoom in to street names, then out to the whole city */
@@ -635,20 +645,15 @@ setup.mapTasks = {
     view: { center: [85.3072, 27.7042], zoom: 13 },
     run: function (map, fb) {
       var stage = 1;
-      fb.say("<b>Part 1 of 2:</b> zoom in until you can read street names.");
       map.on("zoomend", function () {
         var z = map.getZoom();
-        if (stage === 1 && z >= 16.5) {
-          stage = 2;
-          fb.say("Now you can see single streets and buildings. <b>Part 2 of 2:</b> zoom out until you can see the whole city.");
-        } else if (stage === 2 && z <= 11.5) {
-          fb.done("Zooming in shows a small area in detail. Zooming out shows a big area with less detail.");
-        }
+        if (stage === 1 && z >= 16.5) { stage = 2; fb.tick(1); fb.say("Now you can see single streets and buildings. Next, zoom out until you can see the whole city."); }
+        else if (stage === 2 && z <= 11.5) { fb.done("Zooming in shows a small area in detail. Zooming out shows a big area with less detail."); }
       });
     }
   },
 
-  /* Pan/zoom until Dharahara is on screen (no marker: uses city knowledge) */
+  /* Pan/zoom until Dharahara is on screen (its label appears from zoom 14) */
   pan: {
     view: { center: [85.3240, 27.7180], zoom: 15 },
     run: function (map, fb) {
@@ -658,17 +663,16 @@ setup.mapTasks = {
         if (!shown) { shown = true; setup.labelMarker(map, t, "Dharahara"); }
         fb.say("Hint: we've marked Dharahara with a red dot. Move the map until you can see it.");
       }, 45000);
-      function check() {
+      map.on("moveend", function () {
         var c = map.getContainer(), p = map.project([t.lng, t.lat]), m = 0.08;
         var inView = p.x > c.clientWidth * m && p.x < c.clientWidth * (1 - m) && p.y > c.clientHeight * m && p.y < c.clientHeight * (1 - m);
         if (inView && map.getZoom() >= 14) {
           clearTimeout(h1); clearTimeout(h2);
           fb.done("You found Dharahara! Moving and zooming the map together is how you look for any place.");
         } else if (inView) {
-          fb.say("Dharahara is on screen, but the map is zoomed out too far to see it clearly. Zoom in a little.");
+          fb.say("Dharahara is on screen, but the map is zoomed out too far to see it. Zoom in a little.");
         }
-      }
-      map.on("moveend", check);
+      });
       return function () { clearTimeout(h1); clearTimeout(h2); };
     }
   },
@@ -678,58 +682,54 @@ setup.mapTasks = {
     view: { center: [85.3072, 27.7042], zoom: 16 },
     run: function (map, fb) {
       var stage = 1;
-      fb.say("<b>Part 1 of 2:</b> turn the map so that north is no longer at the top.");
       map.on("moveend", function () {
         var b = Math.abs(map.getBearing());
-        if (stage === 1 && b >= 30) {
-          stage = 2;
-          fb.say("North is no longer at the top. <b>Part 2 of 2:</b> tap the <b>compass</b> button (top right) to turn the map back.");
-        } else if (stage === 2 && b <= 1) {
-          fb.done("North is at the top again. The compass always shows which way north is.");
-        }
+        if (stage === 1 && b >= 30) { stage = 2; fb.tick(1); fb.say("North is no longer at the top. Now tap the <b>compass</b> button (top right of the map)."); }
+        else if (stage === 2 && b <= 1) { fb.done("North is at the top again. The compass always shows which way north is."); }
       });
     }
   },
 
-  /* Press and hold on Swayambhunath */
+  /* Press and hold on Swayambhunath; show the distance if wrong */
   pin: {
-    view: { center: [85.3010, 27.7110], zoom: 14.5 },
+    view: { center: [85.2965, 27.7125], zoom: 14.3 },
     run: function (map, fb) {
       return setup.pinTask(map, fb, {
         target: setup.places.swayambhu, radius: 100, revealAfter: 2, revealIsAnswer: false,
-        success: function () { return "Pin dropped on Swayambhunath! You'll use this same press and hold to add a missing place in Baato."; },
+        success: function () { return "Pin dropped on Swayambhunath! A pin marks one exact spot on the map."; },
         retry: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> away from Swayambhunath. Look for its name on the map and try again."; },
         reveal: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> away. The <b>green circle</b> shows Swayambhunath: press and hold inside it."; }
       });
     }
   },
 
-  /* Find TU Cricket Stadium, tap it, get directions, compare travel modes */
+  /* Start at Patan Durbar Square, find TU Cricket Stadium, tap it, route, compare modes */
   route: {
     view: { center: [85.3200, 27.6740], zoom: 14 },
     tall: true,
     run: function (map, fb, box) {
-      var you = setup.places.patan, dest = setup.places.stadium, found = false, seen = {}, mode = "car";
+      var you = setup.places.patan, dest = setup.places.stadium, tapped = false, seen = {}, mode = "car";
       setup.youDot(map, you, "You");
       var panel = setup.panel(box, "bottom hidden");
-      var h1 = setTimeout(function () { if (!found) { fb.say("Hint: TU Cricket Stadium is in <b>Kirtipur</b>, to the <b>west</b> (left) of Patan. Once you're close, zoom in to see its name."); } }, 25000);
-      fb.say("<b>Step 1:</b> find <b>TU Cricket Stadium</b> on the map and tap it.");
-
+      var h1 = setTimeout(function () { if (!tapped) { fb.say("Hint: TU Cricket Stadium is in <b>Kirtipur</b>, to the <b>west</b> (left) of Patan. Once you're close, zoom in to see its name."); } }, 25000);
+      map.on("moveend", function () {
+        var c = map.getContainer(), p = map.project([dest.lng, dest.lat]);
+        if (p.x > 0 && p.x < c.clientWidth && p.y > 0 && p.y < c.clientHeight && map.getZoom() >= 15) { fb.tick(1); }
+      });
       map.on("click", function (e) {
-        if (found) { return; }
+        if (tapped) { return; }
         if (e.lngLat.distanceTo(setup.ll(dest)) <= 180 && map.getZoom() >= 13.5) {
-          found = true; clearTimeout(h1);
+          tapped = true; clearTimeout(h1); fb.tick(1);
           setup.labelMarker(map, dest, dest.name);
           panel.classList.remove("hidden");
-          panel.innerHTML = '<div class="pl-title">TU Cricket Stadium</div><button class="pl-btn" data-act="go">Directions from your location</button>';
-          fb.say("<b>Step 2:</b> tap <b>Directions</b> to get a route from Patan Durbar Square.");
+          panel.innerHTML = '<div class="pl-title">' + dest.name + '</div><button class="pl-btn" data-act="go">Route from your location</button>';
+          fb.say("Tap <b>Route</b> to get directions from Patan Durbar Square.");
         } else if (map.getZoom() < 13.5) {
           fb.miss("Zoom in a little more so you can see place names, then tap the stadium.");
         } else {
           fb.miss("That's not TU Cricket Stadium. Keep looking, or wait for a hint.");
         }
       });
-
       function show(m) {
         mode = m;
         panel.querySelectorAll(".mode").forEach(function (b) { b.classList.toggle("active", b.getAttribute("data-mode") === m); });
@@ -738,18 +738,16 @@ setup.mapTasks = {
           if (mode !== m) { return; }
           setup.drawRoute(map, r, setup.MODE_COLOR[m]);
           setup.fitRoute(map, r);
-          seen[m] = r;
+          seen[m] = r; fb.tick(2);
           panel.querySelector(".pl-sum").innerHTML = "<b>" + setup.MODES[m] + ":</b> " + setup.fmtDist(r.dist) + " · " + setup.fmtTime(r.time);
-          var n = Object.keys(seen).length;
-          if (n < 3) {
-            fb.say("<b>Step 3:</b> now try the other ways to travel. Tap " + Object.keys(setup.MODES).filter(function (k) { return !seen[k]; }).map(function (k) { return "<b>" + setup.MODES[k] + "</b>"; }).join(" and ") + ".");
+          var left = Object.keys(setup.MODES).filter(function (k) { return !seen[k]; });
+          if (left.length) {
+            fb.say("Now try the other ways to travel: tap " + left.map(function (k) { return "<b>" + setup.MODES[k] + "</b>"; }).join(" and ") + ".");
           } else {
             var rows = Object.keys(setup.MODES).map(function (k) { return "<tr><td>" + setup.MODES[k] + "</td><td>" + setup.fmtDist(seen[k].dist) + "</td><td>" + setup.fmtTime(seen[k].time) + "</td></tr>"; }).join("");
             fb.done("Notice how the route changes with how you travel. Walking can use small lanes and paths that cars can't, and each way of travelling takes a different amount of time.<table class=\"cmp\">" + rows + "</table>");
           }
-        }).catch(function () {
-          panel.querySelector(".pl-sum").textContent = "Couldn't get directions. Check your internet connection.";
-        });
+        }).catch(function () { panel.querySelector(".pl-sum").textContent = "Couldn't get directions. Check your internet connection."; });
       }
       panel.addEventListener("click", function (ev) {
         var t = ev.target.closest("button"); if (!t) { return; }
@@ -762,22 +760,20 @@ setup.mapTasks = {
     }
   },
 
-  /* Simulated walk with turn-by-turn directions, time estimate and Recenter */
+  /* Live routing, shown as a still screen: next turn, landmark, time estimate, Recenter */
   live: {
     view: { center: [85.32506, 27.6734], zoom: 15.5 },
     tall: true,
     run: function (map, fb, box) {
-      var you = setup.places.patan, dest = setup.places.stadium;
-      var route = null, mode = null, pos = 0, follow = true, timer = null, stage = 1, marker = null, hint = null;
-      var SPEED = 18;   /* simulated metres per second (sped up so the demo moves) */
+      var you = setup.places.patan, dest = setup.places.stadium, route = null, mode = null, started = false;
       var top = setup.panel(box, "top hidden"), bottom = setup.panel(box, "bottom");
       var recenter = document.createElement("button");
       recenter.className = "recenter hidden"; recenter.textContent = "◎ Recenter";
       box.appendChild(recenter);
-      marker = setup.youDot(map, you, "");
+      setup.youDot(map, you, "");
       setup.labelMarker(map, dest, dest.name);
-      bottom.innerHTML = '<div class="pl-title">Route to TU Cricket Stadium</div><div class="modes">' + Object.keys(setup.MODES).map(function (k) { return '<button class="mode" data-mode="' + k + '">' + setup.MODES[k] + '</button>'; }).join("") + '</div><button class="pl-btn" data-act="start" disabled>Start</button>';
-      fb.say("<b>Step 1:</b> choose <b>Walk</b>, then tap <b>Start</b>.");
+      bottom.innerHTML = '<div class="pl-title">Route to ' + dest.name + '</div><div class="modes">' + Object.keys(setup.MODES).map(function (k) { return '<button class="mode" data-mode="' + k + '">' + setup.MODES[k] + '</button>'; }).join("") + '</div><button class="pl-btn" data-act="start" disabled>Start</button>';
+      fb.say("Choose <b>Walk</b>, then tap <b>Start</b>.");
 
       function pick(m) {
         mode = m;
@@ -787,64 +783,52 @@ setup.mapTasks = {
         setup.getRoute(you, dest, m).then(function (r) {
           if (mode !== m) { return; }
           route = r; setup.drawRoute(map, r, setup.MODE_COLOR[m]); setup.fitRoute(map, r);
-          start.disabled = false; start.textContent = "Start · " + setup.fmtDist(r.dist) + " · " + setup.fmtTime(r.time);
+          start.disabled = (m !== "foot");
+          start.textContent = "Start · " + setup.fmtDist(r.dist) + " · " + setup.fmtTime(r.time);
           if (m !== "foot") { fb.say("For this practice, choose <b>Walk</b>, then tap <b>Start</b>."); }
         }).catch(function () { start.textContent = "Couldn't get directions"; });
       }
-      function update() {
-        var p = setup.pointAt(route, pos);
-        marker.setLngLat(p);
-        if (follow) { map.jumpTo({ center: p }); }
-        var next = null;
-        for (var i = 0; i < route.steps.length; i++) { if (route.steps[i].at > pos + 1) { next = route.steps[i]; break; } }
-        if (!next) { next = { sign: 4, name: "", landmark: "", at: route.dist }; }
-        var left = Math.max(0, route.dist - pos);
-        top.innerHTML = '<div class="nav-icon">' + setup.turnIcon(next.sign) + '</div><div class="nav-txt"><div class="nav-dist">' +
-          (left < 5 ? "You have arrived" : "In " + setup.fmtDist(next.at - pos)) + '</div><div>' + (left < 5 ? "" : setup.turnText(next)) +
-          (next.landmark && left >= 5 ? '<div class="nav-lm">near ' + next.landmark + '</div>' : "") + '</div></div>';
-        bottom.innerHTML = '<div class="nav-eta"><b>' + setup.fmtTime(route.time * left / route.dist) + '</b> · ' + setup.fmtDist(left) + ' left</div><div class="sim-note">Practice walk (sped up)</div>';
-        if (left < 5) { clearInterval(timer); }
+      function startNav() {
+        started = true;
+        var turn = route.steps.find(function (s) { return s.at > 0 && s.sign !== 0; }) || { sign: 4, name: "", at: route.dist };
+        var lm = route.steps.find(function (s) { return s.at > 0 && s.landmark; });
+        top.classList.remove("hidden");
+        top.innerHTML = '<div class="nav-icon">' + setup.turnIcon(turn.sign) + '</div><div class="nav-txt"><div class="nav-dist">In ' + setup.fmtDist(turn.at) +
+          '</div><div>' + setup.turnText(turn) + '</div>' + (lm ? '<div class="nav-lm">Landmark: ' + lm.landmark + ' in ' + setup.fmtDist(lm.at) + '</div>' : "") + '</div>';
+        bottom.innerHTML = '<div class="nav-eta"><b>' + setup.fmtTime(route.time) + '</b> · ' + setup.fmtDist(route.dist) + ' left</div><div class="sim-note">Practice walk</div>';
+        map.jumpTo({ center: route.coords[0], zoom: 17 });
+        fb.tick(1); fb.tick(2); fb.tick(3);
+        fb.say("The top banner shows the <b>distance to your next turn</b> and a nearby <b>landmark</b>. The bottom shows the <b>time left</b> and distance left. Now drag the map away from your location.");
       }
       bottom.addEventListener("click", function (ev) {
         var t = ev.target.closest("button"); if (!t) { return; }
         if (t.getAttribute("data-mode")) { pick(t.getAttribute("data-mode")); }
-        else if (t.getAttribute("data-act") === "start" && route) {
-          if (mode !== "foot") { fb.miss("For this practice, choose <b>Walk</b> first."); return; }
-          top.classList.remove("hidden");
-          map.jumpTo({ zoom: 17, center: route.coords[0] });
-          timer = setInterval(function () { pos += SPEED / 10; update(); }, 100);
-          update();
-          fb.say("<b>Step 2:</b> the top banner shows the <b>distance to your next turn</b>, often with a nearby <b>landmark</b>. The bottom shows the <b>time left</b> and distance left.");
-          hint = setTimeout(function () { if (stage === 1) { stage = 2; fb.say("<b>Step 3:</b> now drag the map away from your location."); } }, 9000);
-        }
+        else if (t.getAttribute("data-act") === "start" && route && mode === "foot") { startNav(); }
       });
       map.on("dragstart", function (e) {
-        if (!timer || !e.originalEvent) { return; }
-        follow = false; stage = 3; clearTimeout(hint);
+        if (!started || !e.originalEvent) { return; }
         recenter.classList.remove("hidden");
-        fb.say("The map stopped following you. <b>Step 4:</b> tap <b>Recenter</b> to go back to your location.");
+        fb.say("The map stopped following you. Tap <b>Recenter</b> to go back to your location.");
       });
       recenter.addEventListener("click", function () {
-        follow = true; recenter.classList.add("hidden");
-        map.easeTo({ center: setup.pointAt(route, pos), zoom: 17, duration: 500 });
+        recenter.classList.add("hidden");
+        map.easeTo({ center: route.coords[0], zoom: 17, duration: 500 });
         fb.done("Recenter brings the map back to where you are, so you can look around and then find yourself again.");
       });
-      return function () { clearInterval(timer); clearTimeout(hint); };
     }
   },
 
-  /* Spatial Thinking 1: location dot, compass, question about Bir Hospital */
+  /* Spatial Thinking 1: location dot (no direction) with compass */
   st1: {
     view: { center: [85.31385, 27.70525], zoom: 17.3 },
     run: function (map) { setup.youDot(map, setup.places.st1You, "You"); }
   },
 
-  /* Spatial Thinking 2: turn the map until the fixed arrow points at the roundabout */
+  /* Spatial Thinking 2: arrow fixed pointing up; turn the map to face the roundabout */
   st2: {
     view: { center: [setup.places.st2You.lng, setup.places.st2You.lat], zoom: 18, bearing: 120 },
     run: function (map, fb, box) {
       var you = setup.places.st2You, rb = setup.places.roundabout, tries = 0;
-      /* keep the photo spot in the middle: no panning, zoom/rotate around the centre */
       map.dragPan.disable();
       map.scrollZoom.enable({ around: "center" });
       map.touchZoomRotate.enable({ around: "center" });
@@ -865,25 +849,22 @@ setup.mapTasks = {
         var diff = ((goal - map.getBearing()) % 360 + 540) % 360 - 180;
         if (Math.abs(diff) <= setup.ST2_TOLERANCE_DEG) {
           fb.done("Correct! The arrow now points the same way the camera was facing: straight at the roundabout.");
+        } else if (++tries >= 3) {
+          map.easeTo({ bearing: goal, duration: 700 });
+          fb.done("Here's the answer: we turned the map so the arrow points at the roundabout, the way the camera was facing when the photo was taken.");
         } else {
-          tries++;
-          if (tries >= 3) {
-            map.easeTo({ bearing: goal, duration: 700 });
-            fb.done("Here's the answer: we turned the map so the arrow points at the roundabout, the way the camera was facing when the photo was taken.");
-          } else {
-            fb.miss("Not quite. Keep turning <b>" + (diff > 0 ? "right" : "left") + "</b>. Look for the roundabout on the map near the arrow.");
-          }
+          fb.miss("Not quite. Keep turning <b>" + (diff > 0 ? "right" : "left") + "</b>. Look for the roundabout on the map near the arrow.");
         }
       });
     }
   },
 
-  /* Spatial Thinking 3: drop a pin where the photo was taken */
+  /* Spatial Thinking 3: drop a pin where the photo was taken from (within 10 m) */
   st3: {
-    view: { center: [85.31365, 27.70305], zoom: 17.5 },
+    view: { center: [85.3134, 27.7032], zoom: 17.5 },
     run: function (map, fb) {
       return setup.pinTask(map, fb, {
-        target: setup.places.st3Spot, radius: setup.ST3_RADIUS_M, revealAfter: 3, revealIsAnswer: true,
+        target: setup.places.st3Spot, radius: setup.ST3_RADIUS_M, revealAfter: 3, revealIsAnswer: true, showAnswerOnDone: true,
         success: function (d) { return "Great spotting! Your pin is only <b>" + setup.fmtDist(d) + "</b> from where the photo was taken."; },
         retry: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> from where the photo was taken. Look at the shape of the roads and the median, and try again."; },
         reveal: function (d) { return "Your pin is <b>" + setup.fmtDist(d) + "</b> away. The <b>green pin</b> shows where the photo was really taken from."; }
@@ -955,7 +936,7 @@ $(document).on(":passagerender", function (ev) {
     img.src = setup.IMG_BASE + file;
     box.insertBefore(img, box.firstChild);
   });
-});</script><tw-tag name="wrap" color="purple"></tw-tag><tw-tag name="intro" color="green"></tw-tag><tw-tag name="maps" color="blue"></tw-tag><tw-tag name="edit" color="orange"></tw-tag><tw-tag name="add" color="yellow"></tw-tag><tw-tag name="road" color="red"></tw-tag><tw-passagedata pid="1" name="PassageHeader" tags="" position="100,100" size="100,100">&lt;&lt;print setup.header()&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="PassageFooter" tags="" position="225,100" size="100,100">&lt;&lt;if setup.prev()&gt;&gt;&lt;div class=&quot;backrow&quot;&gt;&lt;&lt;link &quot;‹ Back&quot; `setup.prev()`&gt;&gt;&lt;&lt;/link&gt;&gt;&lt;/div&gt;&lt;&lt;/if&gt;&gt;</tw-passagedata><tw-passagedata pid="3" name="Widgets" tags="widget" position="350,100" size="100,100">/* Image:  &lt;&lt;img &quot;File.jpg&quot;&gt;&gt;   or with a description for screen readers:
+});</script><tw-tag name="intro" color="green"></tw-tag><tw-tag name="maps" color="blue"></tw-tag><tw-tag name="edit" color="orange"></tw-tag><tw-tag name="add" color="yellow"></tw-tag><tw-tag name="road" color="red"></tw-tag><tw-tag name="wrap" color="purple"></tw-tag><tw-passagedata pid="1" name="PassageHeader" tags="" position="100,100" size="100,100">&lt;&lt;print setup.header()&gt;&gt;</tw-passagedata><tw-passagedata pid="2" name="PassageFooter" tags="" position="225,100" size="100,100">&lt;&lt;if setup.prev()&gt;&gt;&lt;div class=&quot;backrow&quot;&gt;&lt;&lt;link &quot;‹ Back&quot; `setup.prev()`&gt;&gt;&lt;&lt;/link&gt;&gt;&lt;/div&gt;&lt;&lt;/if&gt;&gt;</tw-passagedata><tw-passagedata pid="3" name="Widgets" tags="widget" position="350,100" size="100,100">/* Image:  &lt;&lt;img &quot;File.jpg&quot;&gt;&gt;   or with a description for screen readers:
            &lt;&lt;img &quot;File.jpg&quot; &quot;Baato sign-in screen&quot;&gt;&gt;
    Files come from the image repo set in the Story JavaScript. */
 &lt;&lt;widget &quot;img&quot;&gt;&gt;
@@ -1064,7 +1045,10 @@ That’s the power of local data contribution!
 &lt;&lt;img &quot;Baato_homescreen.jpg&quot;&gt;&gt;
 Let’s see how simple it is to &#39;&#39;contribute data&#39;&#39; to this map!
 Press &#39;&#39;Return&#39;&#39; below and go through each &#39;&#39;how-to section&#39;&#39;.
-[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="15" name="Using Digital Maps: Zooming in/out" tags="maps" position="600,225" size="100,100">&#39;&#39;Zoom in&#39;&#39; until you can see street names, then &#39;&#39;zoom out&#39;&#39; until you can see the whole city.
+[[Return-&gt;Landing Page]]</tw-passagedata><tw-passagedata pid="15" name="Using Digital Maps: Zooming in/out" tags="maps" position="600,225" size="100,100">&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Pinch to zoom in until you see street names,&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;2&quot;&gt;then zoom out until you see the whole city&lt;/div&gt;
+&lt;/div&gt;
 &lt;p class=&quot;how touch-only&quot;&gt;Pinch two fingers apart to zoom in, and together to zoom out. You can also use the + and − buttons.&lt;/p&gt;
 &lt;p class=&quot;how mouse-only&quot;&gt;Scroll the mouse wheel, or use the + and − buttons.&lt;/p&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;zoom&quot;&gt;&lt;/div&gt;
@@ -1072,7 +1056,9 @@ Press &#39;&#39;Return&#39;&#39; below and go through each &#39;&#39;how-to sect
 &lt;&lt;skip&gt;&gt;
 &lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
 [[Next-&gt;Using Digital Maps: Panning/Dragging/City knowledge]]
-&lt;/div&gt;</tw-passagedata><tw-passagedata pid="16" name="Using Digital Maps: Panning/Dragging/City knowledge" tags="maps" position="725,225" size="100,100">Move and zoom the map until &#39;&#39;Dharahara&#39;&#39; is on your screen.
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="16" name="Using Digital Maps: Panning/Dragging/City knowledge" tags="maps" position="725,225" size="100,100">&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Pan/zoom until the Dharahara shows up on screen&lt;/div&gt;
+&lt;/div&gt;
 &lt;p class=&quot;how touch-only&quot;&gt;Put one finger on the map and slide it to move around.&lt;/p&gt;
 &lt;p class=&quot;how mouse-only&quot;&gt;Click and hold on the map, then drag to move around.&lt;/p&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;pan&quot;&gt;&lt;/div&gt;
@@ -1080,29 +1066,45 @@ Press &#39;&#39;Return&#39;&#39; below and go through each &#39;&#39;how-to sect
 &lt;&lt;skip&gt;&gt;
 &lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
 [[Next-&gt;Using Digital Maps: Rotating/compass]]
-&lt;/div&gt;</tw-passagedata><tw-passagedata pid="17" name="Using Digital Maps: Rotating/compass" tags="maps" position="850,225" size="100,100">First, &#39;&#39;turn the map&#39;&#39; so that north is no longer at the top. Then tap the &#39;&#39;compass&#39;&#39; to turn it back.
-&lt;p class=&quot;how touch-only&quot;&gt;To turn the map, put two fingers on it and twist them.&lt;/p&gt;
-&lt;p class=&quot;how mouse-only&quot;&gt;To turn the map, hold the right mouse button (or Ctrl) and drag left or right.&lt;/p&gt;
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="17" name="Using Digital Maps: Rotating/compass" tags="maps" position="850,225" size="100,100">&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;First, rotate the map so that north is no longer up&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;2&quot;&gt;Then, click the compass so that the map returns to default orientation&lt;/div&gt;
+&lt;/div&gt;
+&lt;p class=&quot;how touch-only&quot;&gt;To rotate the map, put two fingers on it and twist them.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;To rotate the map, hold the right mouse button (or Ctrl) and drag left or right.&lt;/p&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;rotate&quot;&gt;&lt;/div&gt;
 &lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
 &lt;&lt;skip&gt;&gt;
 &lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
 [[Next-&gt;Using Digital Maps: Drop a pin]]
-&lt;/div&gt;</tw-passagedata><tw-passagedata pid="18" name="Using Digital Maps: Drop a pin" tags="maps" position="975,225" size="100,100">&#39;&#39;Press and hold&#39;&#39; on &#39;&#39;Swayambhunath&#39;&#39; to drop a pin there.
-&lt;p class=&quot;how touch-only&quot;&gt;Keep your finger still on the spot for about a second.&lt;/p&gt;
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="18" name="Using Digital Maps: Drop a pin" tags="maps" position="975,225" size="100,100">&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Drop a pin on Swayambhunath&lt;/div&gt;
+&lt;/div&gt;
+&lt;p class=&quot;how touch-only&quot;&gt;Press and hold: keep your finger still on the spot for about a second.&lt;/p&gt;
 &lt;p class=&quot;how mouse-only&quot;&gt;Click and hold without moving the mouse for about a second.&lt;/p&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;pin&quot;&gt;&lt;/div&gt;
 &lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
 &lt;&lt;skip&gt;&gt;
 &lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
 [[Next-&gt;Using Digital Maps: Making a route]]
-&lt;/div&gt;</tw-passagedata><tw-passagedata pid="19" name="Using Digital Maps: Making a route" tags="maps" position="1100,225" size="100,100">You are at &#39;&#39;Patan Durbar Square&#39;&#39;. Find &#39;&#39;TU Cricket Stadium&#39;&#39;, tap it, and get directions there.
+&lt;/div&gt;</tw-passagedata><tw-passagedata pid="19" name="Using Digital Maps: Making a route" tags="maps" position="1100,225" size="100,100">You are at &#39;&#39;Patan Durbar Square&#39;&#39; (the blue dot).
+&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Find TU cricket stadium&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;2&quot;&gt;Tap TU cricket stadium and route to it&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;3&quot;&gt;Explore different transportation options and note how routes change slightly based on mode of transport&lt;/div&gt;
+&lt;/div&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;route&quot;&gt;&lt;/div&gt;
 &lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
 &lt;&lt;skip&gt;&gt;
 &lt;div id=&quot;next&quot; class=&quot;hidden&quot;&gt;
 [[Next-&gt;Using Digital Maps: Live routing features]]
 &lt;/div&gt;</tw-passagedata><tw-passagedata pid="20" name="Using Digital Maps: Live routing features" tags="maps" position="1225,225" size="100,100">Now let’s try &#39;&#39;live routing&#39;&#39;, where the map guides you step by step.
+&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Select walking and start routing&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;2&quot;&gt;Note the distances to turns / landmarks given while live routing&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;3&quot;&gt;Note the time estimate given to you&lt;/div&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;4&quot;&gt;Try to pan to a different location, then recenter on your current location&lt;/div&gt;
+&lt;/div&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;live&quot;&gt;&lt;/div&gt;
 &lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
 &lt;&lt;skip&gt;&gt;
@@ -1111,8 +1113,9 @@ Press &#39;&#39;Return&#39;&#39; below and go through each &#39;&#39;how-to sect
 &lt;/div&gt;</tw-passagedata><tw-passagedata pid="21" name="Using Digital Maps: Spatial Thinking 1" tags="maps" position="100,350" size="100,100">&lt;&lt;set _correct to &quot;The answer is: West.&quot;&gt;&gt;
 This photo was taken from the &#39;&#39;blue dot&#39;&#39; on the map below.
 &lt;&lt;img &quot;Bir_hospital.jpg&quot; &quot;Bir Hospital seen from across the road&quot;&gt;&gt;
-Use the &#39;&#39;compass&#39;&#39; on the map to work out directions. Which direction is &#39;&#39;Bir Hospital&#39;&#39; from you?
+Use the &#39;&#39;compass&#39;&#39; on the map to work out directions.
 &lt;div class=&quot;mapbox&quot; data-task=&quot;st1&quot;&gt;&lt;/div&gt;
+Select where the &#39;&#39;Bir Hospital&#39;&#39; is in relation to your location.
 &lt;&lt;answer &quot;North&quot; false &quot;Not quite. Find Bir Hospital’s name on the map, then compare it with the compass.&quot;&gt;&gt;
 &lt;&lt;answer &quot;East&quot; false &quot;Not quite. Find Bir Hospital’s name on the map, then compare it with the compass.&quot;&gt;&gt;
 &lt;&lt;answer &quot;South&quot; false &quot;Not quite. Find Bir Hospital’s name on the map, then compare it with the compass.&quot;&gt;&gt;
@@ -1122,9 +1125,11 @@ Use the &#39;&#39;compass&#39;&#39; on the map to work out directions. Which dir
 [[Next-&gt;Using Digital Maps: Spatial Thinking 2]]
 &lt;/div&gt;</tw-passagedata><tw-passagedata pid="22" name="Using Digital Maps: Spatial Thinking 2" tags="maps" position="225,350" size="100,100">This photo was taken from the &#39;&#39;blue arrow&#39;&#39; on the map below.
 &lt;&lt;img &quot;Roundabout.jpg&quot; &quot;Statue on a roundabout, with shops behind it&quot;&gt;&gt;
-&#39;&#39;Turn the map&#39;&#39; until the arrow points the way the camera was facing: straight at the &#39;&#39;roundabout&#39;&#39;. Then tap &#39;&#39;Check my answer&#39;&#39;.
-&lt;p class=&quot;how touch-only&quot;&gt;Twist two fingers on the map, or use the Turn buttons.&lt;/p&gt;
-&lt;p class=&quot;how mouse-only&quot;&gt;Hold the right mouse button (or Ctrl) and drag, or use the Turn buttons.&lt;/p&gt;
+&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Rotate the map so that the direction indicating dot is pointing in the direction that the photo was taken in&lt;/div&gt;
+&lt;/div&gt;
+&lt;p class=&quot;how touch-only&quot;&gt;Twist two fingers on the map, or use the Turn buttons. Then tap Check my answer.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;Hold the right mouse button (or Ctrl) and drag, or use the Turn buttons. Then click Check my answer.&lt;/p&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;st2&quot;&gt;&lt;/div&gt;
 &lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
 &lt;&lt;skip&gt;&gt;
@@ -1132,7 +1137,11 @@ Use the &#39;&#39;compass&#39;&#39; on the map to work out directions. Which dir
 [[Next-&gt;Using Digital Maps: Spatial Thinking 3]]
 &lt;/div&gt;</tw-passagedata><tw-passagedata pid="23" name="Using Digital Maps: Spatial Thinking 3" tags="maps" position="350,350" size="100,100">Where was this photo taken from?
 &lt;&lt;img &quot;Triangle_median.jpg&quot; &quot;Busy road with a triangle-shaped median in front of a tall building&quot;&gt;&gt;
-&#39;&#39;Press and hold&#39;&#39; on the map to drop a pin where you think the photo was &#39;&#39;taken from&#39;&#39;.
+&lt;div class=&quot;tasks&quot;&gt;
+&lt;div class=&quot;task&quot; data-step=&quot;1&quot;&gt;Drop a pin at the spot you thought the picture was taken from&lt;/div&gt;
+&lt;/div&gt;
+&lt;p class=&quot;how touch-only&quot;&gt;Press and hold on the map to drop a pin.&lt;/p&gt;
+&lt;p class=&quot;how mouse-only&quot;&gt;Click and hold on the map to drop a pin.&lt;/p&gt;
 &lt;div class=&quot;mapbox&quot; data-task=&quot;st3&quot;&gt;&lt;/div&gt;
 &lt;div id=&quot;feedback&quot;&gt;&lt;/div&gt;
 &lt;&lt;skip&gt;&gt;
